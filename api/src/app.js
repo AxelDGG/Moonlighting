@@ -15,7 +15,7 @@ export async function createApp() {
   if (!config.supabaseServiceKey) throw new Error('Missing env: SUPABASE_SERVICE_KEY');
 
   const app = Fastify({
-    logger: config.isProduction
+    logger: config.nodeEnv === 'production'
       ? { level: 'warn' }
       : { level: 'info' },
     trustProxy: true,
