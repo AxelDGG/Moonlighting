@@ -1,5 +1,4 @@
 import { createApp } from './app.js';
-import { config } from './config.js';
 
 const app = await createApp();
 const port = Number(process.env.PORT) || 3001;

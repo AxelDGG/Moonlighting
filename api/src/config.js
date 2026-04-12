@@ -1,8 +1,16 @@
+const {
+  SUPABASE_URL,
+  SUPABASE_SERVICE_KEY,
+  GROQ_API_KEY,
+  FRONTEND_URL,
+  NODE_ENV,
+} = process.env;
+
 export const config = {
-  supabaseUrl:        process.env.SUPABASE_URL,
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
-  groqApiKey:         process.env.GROQ_API_KEY,
-  frontendUrl:        process.env.FRONTEND_URL,
-  isProduction:       process.env.NODE_ENV === 'production',
+  supabaseUrl:        SUPABASE_URL,
+  supabaseServiceKey: SUPABASE_SERVICE_KEY,
+  groqApiKey:         GROQ_API_KEY,
+  frontendUrl:        FRONTEND_URL,
+  isProduction:       NODE_ENV === 'production',
   port:               3001,
 };
