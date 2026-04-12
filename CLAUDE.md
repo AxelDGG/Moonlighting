@@ -4,73 +4,132 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Moonlighting — Abanicos & Persianas** is a business management web app for a ceiling fan and blind installation company in Monterrey, NL. It handles clients, orders, calendar scheduling, route mapping, operational metrics, and AI-generated feedback.
+**Moonlighting — Abanicos & Persianas** is a business management app for a ceiling fan and blind installation company in Monterrey, NL. Stack: Fastify (Node.js) backend + Vite vanilla JS frontend, deployed on Vercel.
 
-## Stack & Running the App
+## Commands
 
-No build system. The app is three plain files:
-- `index.html` — all HTML structure and modals
-- `app.js` — all application logic (`'use strict'`, vanilla JS)
-- `style.css` — all styles
+```bash
+# Dev (both servers concurrently)
+npm run dev
 
-To run: open `index.html` in a browser or serve with any static file server (e.g. `npx serve .`). There are no tests, no linting, no compilation step.
+# Frontend only (port 5173)
+npm --prefix frontend run dev
 
-**External dependencies via CDN** (no npm):
-- Supabase JS v2 (`@supabase/supabase-js@2`)
-- Leaflet 1.9.4 (map rendering)
-- Groq API called directly via `fetch`
+# API only (port 3001)
+npm --prefix api run dev
+
+# Production build (Vite → frontend/dist)
+npm run build
+
+# Install deps for both packages
+cd frontend && npm install && cd ../api && npm install
+```
+
+No tests or lint scripts.
 
 ## Architecture
 
-### Data Layer
+### Monorepo layout
 
-Three global state arrays are the source of truth:
+Two independent packages — **no npm workspaces** (removed; caused Vercel bundler conflicts):
+
 ```
-clientes[]          — customers
-pedidos[]           — orders
-servicios_metricas[]— service tracking records
+api/
+  index.js        Vercel handler — singleton (let app = null, reused across warm invocations)
+  src/
+    config.js     env vars destructured at module top (esbuild constraint — see below)
+    app.js        createApp() — registers plugins then routes
+    plugins/      cors, helmet, rate-limit, supabase, auth
+    routes/       clientes, pedidos, metricas, ai
+
+frontend/
+  index.html
+  src/
+    main.js       entry — wires auth, assigns window.* globals for HTML onclick handlers
+    api.js        fetch wrapper — attaches Bearer token, all requests go to /api/*
+    auth.js       Supabase client (VITE_ env vars), token stored in module-level _token
+    state.js      3 global arrays + DB row mappers (cFromDb/pFromDb/smFromDb)
+    ui.js         toast, loader, overlay helpers, badge
+    constants.js  TIPO_IC, TIPO_BG and other shared constants
+    utils.js      money, esc, fdateShort, mdToHtml
+    modules/      dashboard, clientes, pedidos, calendar, mapa, tracking, metricas
 ```
 
-These are loaded once on login via `loadAll()` (parallel Supabase queries), then kept in sync by `dbInsert*/dbUpdate*/dbDelete*` functions that update both Supabase and the local array.
+### Request flow
 
-DB mappers (`cFromDb/cToDb`, `pFromDb/pToDb`, `smFromDb`) handle snake_case ↔ camelCase conversion between Supabase rows and JS objects.
+```
+Browser → fetch /api/* → Vite proxy (dev) / Vercel rewrite (prod) → api/index.js
+                                          ↓ verifyAuth preHandler (validates Supabase JWT)
+                                          ↓ route handler → fastify.supabase.from(...)
+```
 
-### Render Flow
+Frontend auth: Supabase client in `auth.js` handles login/session → JWT stored in `_token` → `api.js` attaches it as `Authorization: Bearer` on every request.
 
-Tab navigation calls `showTab(name)` → `render*()` functions read from global state arrays and write innerHTML. No virtual DOM, no reactivity — all re-renders are full repaints of the relevant section.
+### Critical Vercel/esbuild constraint
 
-Pattern: `render*()` → reads state → builds HTML string → sets `innerHTML`.
+`api/src/config.js` **must** destructure `process.env` at module level before assigning values. Vercel's bundler cannot handle:
+- `CallExpression` at module level — e.g. `requireEnv('X')`
+- `BinaryExpression` on `process.env` — e.g. `process.env.X || 'default'`
 
-### Modal System
+**Working pattern:**
+```js
+const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+export const config = { supabaseUrl: SUPABASE_URL, ... };
+```
 
-Overlays use class `.ov` + `.open`. `openOv(id)` / `closeOv(id)` add/remove `.open`.
+Defaults belong in the callers (`cors.js`, `dev-server.js`), never in `config.js`.
 
-**Pedido modal** (`ov-ped`): `openPedidoModal(id=null)` handles both create and edit. When `id` is provided it's edit mode; `p-eid` hidden input stores the ID. `updatePF()` shows/hides fields based on service type — all referenced IDs (`r-ab-hd`, `r-pe-hd`, `r-nt-hd`, `r-modelo`, `r-ndesins`, `r-ancho`, `r-alto`, `r-inst`, `r-tela`, `r-notas`) must exist in the HTML or `updatePF()` crashes and the modal never opens.
+### Frontend globals
 
-**Cliente modal** (`ov-cli`): edit-only, no create flow.
+`main.js` assigns all exported functions to `window.*` so HTML `onclick` attributes work with ES modules. If a new function needs to be callable from HTML, add it to `window` in `main.js`.
 
-### Key Subsystems
+### Render pattern
 
-**Calendar** (`renderCalWeek` / `renderCalDay`): reads `pedidos[]` filtered by date. Day view shows edit (✏️) and tracking (📍) buttons per order. Week view chips call `openPedidoModal(id)`.
+`showTab(name)` → calls the relevant `render*()` function → reads from global state arrays → builds HTML string → sets `innerHTML`. No virtual DOM, no reactivity.
 
-**Map** (`initMap` / `updateMapMarkers`): Leaflet map with geocoding via Nominatim. `getClientServiceStatus(clienteId)` derives marker color from `servicios_metricas`. Filter state in `mapFilter` object + `activeLayers` object for municipio toggles.
+XSS: always call `esc()` before writing user data into innerHTML. `mdToHtml()` calls `esc()` internally before applying markdown transforms.
 
-**Metrics** (`renderMetricas`): reads `servicios_metricas[]` joined with `pedidos[]`. All charts are hand-drawn SVG (donut) or `renderBarChart()` (bar rows).
+### Data layer
 
-**Groq LLM** (`generateFeedback`): calls `https://api.groq.com/openai/v1/chat/completions`. `buildMetricsData()` aggregates all KPIs → `buildGroqPrompt(data)` builds the prompt → response rendered via `mdToHtml()`. Model and key are constants at the top of the `GROQ LLM` section.
+`state.js` holds `clientes[]`, `pedidos[]`, `servicios_metricas[]`. Loaded once via `loadAll()` (`Promise.all` of three API calls). All mutations go through `api.js` — no direct Supabase calls from modules.
 
-**Auth**: Supabase Auth via `db.auth.onAuthStateChange`. Login screen (`#login-screen`) shown by default; `#app-shell` has `display:none` until auth check passes.
+DB mappers: `cFromDb`/`cToDb` (clientes), `pFromDb`/`pToDb` (pedidos), `smFromDb` (metricas) — handle snake_case ↔ camelCase conversion.
 
-### CSS Conventions
+### Environment variables
 
-CSS variables defined in `:root`: `--p` (primary blue), `--bg`, `--card`, `--text`, `--mu` (muted), `--bo` (border), `--ok`, `--err`, `--wa` (warning).
+**API** (`api/.env` locally, Vercel env vars in production):
+| Variable | Purpose |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | service_role key (secret) |
+| `GROQ_API_KEY` | Groq LLM API key |
+| `FRONTEND_URL` | Allowed CORS origin |
 
-Button classes: `btn bp` (primary), `btn bg` (gray), `btn bw` (white/outline), `btn bd` (danger), `btn bsm` (small). Cards use `.card > .ch` (header) + `.cb` (body). Tables use `.tw > table`.
+**Frontend** (`frontend/.env` locally, Vercel env vars in production — must have `VITE_` prefix):
+| Variable | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | anon/public key |
 
-## Supabase Tables
+Frontend uses `import.meta.env.VITE_*`. API uses destructured `process.env`. Never mix them.
 
-- `clientes` — customer records with geocoords and payment method
+### Vercel config (`vercel.json`)
+
+- **installCommand**: `cd frontend && npm install && cd ../api && npm install` — uses `cd`, not `--prefix` or workspace flags (both caused bundler issues)
+- **buildCommand**: `cd frontend && npm run build`
+- **outputDirectory**: `frontend/dist`
+- **Rewrite**: `/api/(.*)` → `api/index.js`
+
+### Supabase tables
+
+- `clientes` — customers with geocoords and payment method
 - `pedidos` — orders with `cliente_id` FK, `tipo_servicio`, `detalles` (JSONB)
 - `servicios_metricas` — service tracking with timestamps, technician, delay data
 
-Config constants (`SB_URL`, `SB_KEY`) are at the top of `app.js`.
+### CSS conventions
+
+Variables in `:root`: `--p` (primary blue), `--bg`, `--card`, `--text`, `--mu` (muted), `--bo` (border), `--ok`, `--err`, `--wa` (warning).
+
+Button classes: `btn bp` (primary), `btn bg` (gray), `btn bw` (white/outline), `btn bd` (danger), `btn bsm` (small). Cards: `.card > .ch` (header) + `.cb` (body). Tables: `.tw > table`.
+
+Leaflet loaded via CDN in `index.html` (exposes `L` globally) — map module in `modules/mapa.js`.
