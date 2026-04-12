@@ -11,6 +11,9 @@ import aiRoutes        from './routes/ai.js';
 import { config }      from './config.js';
 
 export async function createApp() {
+  if (!config.supabaseUrl)        throw new Error('Missing env: SUPABASE_URL');
+  if (!config.supabaseServiceKey) throw new Error('Missing env: SUPABASE_SERVICE_KEY');
+
   const app = Fastify({
     logger: config.isProduction
       ? { level: 'warn' }
