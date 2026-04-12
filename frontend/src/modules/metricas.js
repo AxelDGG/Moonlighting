@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc, calcDuracionMin, tipoPill, statusPill, fdate, money, mdToHtml } from '../utils.js';
 import { toast } from '../ui.js';
 import { STATUS_LABELS, STATUS_COLORS, TIPO_CO } from '../constants.js';
+import { ic } from '../icons.js';
 
 export function renderMetricas() {
   renderMetKPIs(); renderMetDonut(); renderMetZona(); renderMetTipo();
@@ -20,7 +21,7 @@ function renderMetKPIs() {
   const pctOk = total ? Math.round((completed / total) * 100) : 0;
   document.getElementById('met-kpis').innerHTML = `
     <div class="met-card mc-blue"><div class="met-val">${total}</div><div class="met-label">Servicios</div></div>
-    <div class="met-card mc-green"><div class="met-val">${completed}</div><div class="met-label">Completados</div><div class="met-trend up">✓ ${pctOk}%</div></div>
+    <div class="met-card mc-green"><div class="met-val">${completed}</div><div class="met-label">Completados</div><div class="met-trend up">${ic('check')} ${pctOk}%</div></div>
     <div class="met-card mc-red"><div class="met-val">${delayed}</div><div class="met-label">Retrasos</div></div>
     <div class="met-card mc-amber"><div class="met-val">${avgDelay}m</div><div class="met-label">Retraso Prom.</div></div>
     <div class="met-card mc-purple"><div class="met-val">${avgDur}m</div><div class="met-label">Duración Prom.</div></div>`;
@@ -79,7 +80,7 @@ function renderMetDia() {
 function renderMetMotivos() {
   const m = {};
   state.servicios_metricas.filter(s => s.motivo_retraso).forEach(s => { m[s.motivo_retraso] = (m[s.motivo_retraso] || 0) + 1; });
-  state.servicios_metricas.filter(s => s.motivo_cancelacion).forEach(s => { const k = '❌ ' + s.motivo_cancelacion; m[k] = (m[k] || 0) + 1; });
+  state.servicios_metricas.filter(s => s.motivo_cancelacion).forEach(s => { const k = '[C] ' + s.motivo_cancelacion; m[k] = (m[k] || 0) + 1; });
   renderBarChart('met-motivos', Object.entries(m).map(([l, v]) => ({ label: l, value: v, display: v + 'x' })).sort((a, b) => b.value - a.value), 0, '#7c3aed');
 }
 function renderMetHistorial() {
@@ -133,8 +134,8 @@ export async function generateFeedback() {
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--bo);font-size:11px;color:var(--mu)">Generado con ${esc(model)} · ${new Date().toLocaleString('es')}</div>`;
     toast('Análisis generado correctamente');
   } catch (err) {
-    body.innerHTML = `<div style="color:var(--err);padding:12px;font-size:13px">❌ ${esc(err.message)}</div>`;
+    body.innerHTML = `<div style="color:var(--err);padding:12px;font-size:13px;display:flex;align-items:center;gap:6px">${ic('x-circle')} ${esc(err.message)}</div>`;
     toast('Error al generar análisis: ' + err.message, 'er');
   }
-  [btn, btnR].forEach(b => { if (b) { b.disabled = false; b.innerHTML = b === btn ? '🤖 Generar retroalimentación IA' : '↺ Regenerar'; } });
+  [btn, btnR].forEach(b => { if (b) { b.disabled = false; b.innerHTML = b === btn ? `${ic('sparkles')} Generar retroalimentación IA` : `${ic('refresh')} Regenerar`; } });
 }

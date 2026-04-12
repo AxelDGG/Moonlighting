@@ -2,6 +2,7 @@ import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pillPago, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge } from '../ui.js';
+import { ic } from '../icons.js';
 import { renderDash } from './dashboard.js';
 
 let cliMode = 'ex';
@@ -196,9 +197,9 @@ export function renderPedidos() {
       <td data-label="Total" class="bold grn nw">${money(p.total)}</td>
       <td data-label="Estado">${sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
       <td class="nw">
-        <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">📍</button>
-        <button class="btn bw bsm" onclick="openPedidoModal(${p.id})">✏️</button>
-        <button class="btn bd bsm" onclick="deletePedido(${p.id})">🗑️</button>
+        <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">${ic('pin')}</button>
+        <button class="btn bw bsm" onclick="openPedidoModal(${p.id})" title="Editar">${ic('edit')}</button>
+        <button class="btn bd bsm" onclick="deletePedido(${p.id})" title="Eliminar">${ic('trash')}</button>
       </td></tr>`;
   }).join('');
   badge(state.pedidos.length + ' pedidos');

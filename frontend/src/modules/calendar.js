@@ -1,6 +1,7 @@
 import { state } from '../state.js';
 import { esc, money, fdate, todayStr, tipoPill, statusPill, pillPago, pedidoDetalle, muniColor } from '../utils.js';
 import { TIPO_IC, TIPO_BG, TIPO_CO, STATUS_COLORS } from '../constants.js';
+import { ic } from '../icons.js';
 
 let calMode = 'week';
 let calDate = new Date();
@@ -38,10 +39,10 @@ function renderCalWeek() {
     html += `<div class="cal-day-col"><div class="cal-day-hd${isT ? ' today' : ''}"><div class="cal-dn">${DIAS[i]}</div><div class="cal-dd" onclick="goToDay('${ds}')">${day.getDate()}</div>${dps.length ? `<div style="font-size:10px;margin-top:1px;opacity:.75">${dps.length} pedido${dps.length > 1 ? 's' : ''}</div>` : ''}</div>
       <div class="cal-day-bd">${dps.map(p => {
         const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
-        const bg = TIPO_BG[p.tipoServicio] || '#f1f5f9', co = TIPO_CO[p.tipoServicio] || '#475569', ic = TIPO_IC[p.tipoServicio] || '📦';
+        const bg = TIPO_BG[p.tipoServicio] || '#f1f5f9', co = TIPO_CO[p.tipoServicio] || '#475569', tipoIc = TIPO_IC[p.tipoServicio] || '';
         const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-        const dot = sm ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${STATUS_COLORS[sm.estado] || '#94a3b8'};margin-right:3px"></span>` : '';
-        return `<div class="cal-chip" style="background:${bg};color:${co}" onclick="openPedidoModal(${p.id})"><b>${dot}${ic} ${c ? esc(c.nombre) : 'Sin cliente'}</b><span>${esc(p.tipoServicio)} ${money(p.total)}</span></div>`;
+        const dot = sm ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${STATUS_COLORS[sm.estado] || '#94a3b8'};margin-right:3px;flex-shrink:0"></span>` : '';
+        return `<div class="cal-chip" style="background:${bg};color:${co}" onclick="openPedidoModal(${p.id})"><b style="display:flex;align-items:center;gap:3px">${dot}${tipoIc} ${c ? esc(c.nombre) : 'Sin cliente'}</b><span>${esc(p.tipoServicio)} ${money(p.total)}</span></div>`;
       }).join('')}${!dps.length ? '<div style="font-size:11px;color:var(--mu);padding:5px 3px;text-align:center">—</div>' : ''}</div></div>`;
   });
   html += '</div>';

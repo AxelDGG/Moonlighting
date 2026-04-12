@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { esc, muniColor, pillPago, todayStr, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
-import { PAGO_IC } from '../constants.js';
+import { ic } from '../icons.js';
 
 async function geocode(address) {
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`, { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } });
@@ -61,8 +61,9 @@ export async function submitCliente(e) {
 export function editPago(id) {
   const span = document.getElementById('pago-' + id);
   const c = state.clientes.find(x => x.id === id); if (!c) return;
+  const opts = ['Efectivo', 'Tarjeta', 'Transferencia', 'Credito'];
   span.innerHTML = `<select onchange="savePago(${id},this.value)" onblur="renderClientes()" style="padding:4px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;outline:none">
-    ${Object.keys(PAGO_IC).map(m => `<option value="${m}" ${c.metodoPago === m ? 'selected' : ''}>${PAGO_IC[m]} ${m}</option>`).join('')}
+    ${opts.map(m => `<option value="${m}" ${c.metodoPago === m ? 'selected' : ''}>${m}</option>`).join('')}
   </select>`;
   span.querySelector('select').focus();
 }
@@ -97,8 +98,8 @@ export function renderClientes() {
       <td data-label="Pago" id="pago-${c.id}" onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar">${pillPago(c.metodoPago)}</td>
       <td data-label="Pedido">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
       <td class="nw">
-        <button class="btn bw bsm" onclick="openClienteModal(${c.id})">✏️</button>
-        <button class="btn bd bsm" onclick="deleteCliente(${c.id})">🗑️</button>
+        <button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar">${ic('edit')}</button>
+        <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar">${ic('trash')}</button>
       </td></tr>`;
   }).join('');
   badge(state.clientes.length + ' clientes');

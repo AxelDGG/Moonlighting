@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc, muniColor, pillPago, tipoPill, statusPill, pedidoDetalle, money, todayStr } from '../utils.js';
 import { toast } from '../ui.js';
 import { MUNIS, TIPO_IC, TIPO_BG, TIPO_CO } from '../constants.js';
+import { ic } from '../icons.js';
 
 let map = null;
 let mapMarkers = [];
@@ -143,7 +144,7 @@ export async function updateMapMarkers() {
     const pedHtml = pedCli.length
       ? pedCli.map(p => {
           const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-          return `<div style="margin-top:3px;font-size:11px;color:#475569">${TIPO_IC[p.tipoServicio] || '📦'} ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
+          return `<div style="margin-top:3px;font-size:11px;color:#475569">${TIPO_IC[p.tipoServicio] || ''} ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
         }).join('')
       : '<div style="font-size:11px;color:#94a3b8;margin-top:3px">Sin pedidos</div>';
 
@@ -156,8 +157,8 @@ export async function updateMapMarkers() {
           <span style="font-size:11px;color:#64748b">${esc(muni)}</span>
         </div>
         ${statusLabel}
-        📞 ${esc(client.numero)}<br/>
-        📍 <span style="font-size:11.5px">${esc(client.direccion)}</span><br/>
+        <span style="display:inline-flex;align-items:center;gap:4px">${ic('phone')} ${esc(client.numero)}</span><br/>
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px">${ic('pin')} ${esc(client.direccion)}</span><br/>
         ${pillPago(client.metodoPago)}<br/>
         ${pedHtml}
       </div>`,

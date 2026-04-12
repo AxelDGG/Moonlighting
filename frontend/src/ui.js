@@ -1,7 +1,15 @@
+const _checkIc = `<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const _xIc     = `<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+
 export function toast(msg, type = 'ok') {
   const el = document.createElement('div');
   el.className = `toast t${type}`;
-  el.textContent = (type === 'ok' ? '✅' : '❌') + ' ' + msg;
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.innerHTML = type === 'ok' ? _checkIc : _xIc;
+  icon.style.color = type === 'ok' ? '#22c55e' : '#ef4444';
+  el.appendChild(icon);
+  el.appendChild(document.createTextNode(msg));
   document.getElementById('toasts')?.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }

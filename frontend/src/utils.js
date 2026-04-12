@@ -25,16 +25,46 @@ export function calcDuracionMin(inicio, fin) {
 }
 
 export function muniColor(m) { return (MUNIS[m] || {}).color || '#94a3b8'; }
-export function pillPago(p) { const cl = PAGO_CLS[p] || 'pi', ic = PAGO_IC[p] || ''; return `<span class="pill ${cl}">${ic} ${esc(p)}</span>`; }
-export function tipoPill(t) { const bg = TIPO_BG[t] || '#f1f5f9', co = TIPO_CO[t] || '#475569', ic = TIPO_IC[t] || '📦'; return `<span class="pill" style="background:${bg};color:${co}">${ic} ${t}</span>`; }
-export function statusPill(estado) {
-  const col = STATUS_COLORS[estado] || '#94a3b8', bg = STATUS_BG[estado] || '#f1f5f9', label = STATUS_LABELS[estado] || estado;
-  const icons = { programado: '🕐', en_curso: '🔄', completado: '✅', cancelado: '❌', atrasado: '⚠️' };
-  return `<span class="pill" style="background:${bg};color:${col}">${icons[estado] || '•'} ${label}</span>`;
+
+export function pillPago(p) {
+  const cl = PAGO_CLS[p] || 'pi';
+  const ic = PAGO_IC[p] || '';
+  return `<span class="pill ${cl}">${ic}${esc(p)}</span>`;
 }
+
+export function tipoPill(t) {
+  const bg = TIPO_BG[t] || '#f1f5f9';
+  const co = TIPO_CO[t] || '#475569';
+  const ic = TIPO_IC[t] || '';
+  return `<span class="pill" style="background:${bg};color:${co}">${ic}${t}</span>`;
+}
+
+const _statusIc = (d, sw = '1.75') =>
+  `<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+const STATUS_IC = {
+  programado: _statusIc(`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`),
+  en_curso:   _statusIc(`<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`),
+  completado: _statusIc(`<polyline points="20 6 9 17 4 12"/>`, '2.5'),
+  cancelado:  _statusIc(`<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>`),
+  atrasado:   _statusIc(`<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`),
+};
+
+export function statusPill(estado) {
+  const col   = STATUS_COLORS[estado] || '#94a3b8';
+  const bg    = STATUS_BG[estado]     || '#f1f5f9';
+  const label = STATUS_LABELS[estado] || estado;
+  const ic    = STATUS_IC[estado]     || '';
+  return `<span class="pill" style="background:${bg};color:${col}">${ic}${label}</span>`;
+}
+
 export function pedidoDetalle(p) {
   const d = p.detalles || {};
-  if (p.tipoServicio === 'Abanico') { let h = `<span class="bold">${esc(d.modelo || '')}</span>`; if (d.nDesins > 0) h += ` <span class="pill" style="background:#fef3c7;color:#92400e;font-size:10px">⬇ ×${d.nDesins}</span>`; return h; }
+  if (p.tipoServicio === 'Abanico') {
+    let h = `<span class="bold">${esc(d.modelo || '')}</span>`;
+    if (d.nDesins > 0) h += ` <span class="pill" style="background:#fef3c7;color:#92400e;font-size:10px">x${d.nDesins} desins.</span>`;
+    return h;
+  }
   if (p.tipoServicio === 'Persiana') return `<span class="bold">${esc(d.tipoTela || '')}</span> <span class="mu">${d.ancho}×${d.alto}cm · ${d.instalacion}</span>`;
   if (p.tipoServicio === 'Limpieza') return `<span class="bold">${esc(d.modelo || '')}</span>${d.notas ? ` <span class="mu">${esc(d.notas)}</span>` : ''}`;
   return `<span class="mu">${esc(d.notas || '—')}</span>`;
@@ -52,7 +82,6 @@ export function downloadCSV(csv, filename) {
 }
 
 export function mdToHtml(text) {
-  // Escape HTML first so LLM output can never inject tags
   return esc(text)
     .replace(/^## (.*?)$/gm, '<h3 style="font-size:13.5px;font-weight:700;margin:16px 0 6px;color:var(--text)">$1</h3>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
