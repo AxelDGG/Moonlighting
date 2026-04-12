@@ -41,8 +41,8 @@ export default fp(async (fastify) => {
     const ICONS = { Abanico: '🪭', Persiana: '🪟', Levantamiento: '📐', Limpieza: '🧹', Mantenimiento: '🔧' };
     const ic     = ICONS[pedido.tipo_servicio] || '📋';
     const nombre = cliente?.nombre || 'Sin cliente';
-    const hora   = metrica?.hora_programada || '08:00';
-    const fin    = metrica?.hora_fin || addOneHour(hora);
+    const hora   = (metrica?.hora_programada || '08:00').slice(0, 5);
+    const fin    = (metrica?.hora_fin || addOneHour(hora)).slice(0, 5);
     const zona   = metrica?.zona || cliente?.municipio || '';
     const dir    = cliente?.direccion ? `${zona} — ${cliente.direccion}` : zona;
 
