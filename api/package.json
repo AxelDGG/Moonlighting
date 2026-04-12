@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env --watch src/dev-server.js"
+    "dev": "node --env-file=.env --watch _src/dev-server.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
