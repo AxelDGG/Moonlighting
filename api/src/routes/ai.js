@@ -1,5 +1,3 @@
-import { config } from '../config.js';
-
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 const zonaSchema = { type: 'object', properties: { zona: { type: 'string' }, avg: { type: 'number' } } };
@@ -8,11 +6,11 @@ const tipoSchema = { type: 'object', properties: { tipo: { type: 'string' }, avg
 const diaSchema  = { type: 'object', properties: { dia: { type: 'string' }, avg: { type: 'number' } } };
 
 function buildPrompt(d) {
-  const zonas  = d.zonas.length  ? d.zonas.map(z => `- ${z.zona}: ${z.avg} min prom.`).join('\n') : 'Sin datos';
-  const tecs   = d.tecnicos.length ? d.tecnicos.map(t => `- ${t.tec}: ${t.pct}% completados (${t.n} servicios)`).join('\n') : 'Sin datos';
-  const tipos  = d.tipos.length  ? d.tipos.map(t => `- ${t.tipo}: ${t.avg} min prom.`).join('\n') : 'Sin datos';
-  const dias   = d.dias.slice(0, 5).map(x => `- ${x.dia}: ${x.avg} min prom.`).join('\n') || 'Sin datos';
-  const motivos = d.motivos.length ? d.motivos.join(', ') : 'Sin datos';
+  const zonas   = d.zonas.length    ? d.zonas.map(z => `- ${z.zona}: ${z.avg} min prom.`).join('\n') : 'Sin datos';
+  const tecs    = d.tecnicos.length ? d.tecnicos.map(t => `- ${t.tec}: ${t.pct}% completados (${t.n} servicios)`).join('\n') : 'Sin datos';
+  const tipos   = d.tipos.length    ? d.tipos.map(t => `- ${t.tipo}: ${t.avg} min prom.`).join('\n') : 'Sin datos';
+  const dias    = d.dias.slice(0, 5).map(x => `- ${x.dia}: ${x.avg} min prom.`).join('\n') || 'Sin datos';
+  const motivos = d.motivos.length  ? d.motivos.join(', ') : 'Sin datos';
 
   return `Eres un consultor de operaciones para Moonlighting, empresa de instalación de abanicos y persianas en Monterrey, NL.
 
@@ -85,7 +83,8 @@ export default async function aiRoutes(fastify) {
       },
     },
   }, async (req, reply) => {
-    if (!config.groqApiKey) {
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
       return reply.code(503).send({ error: 'GROQ_API_KEY no configurado en el servidor' });
     }
     const prompt = buildPrompt(req.body);
@@ -94,7 +93,7 @@ export default async function aiRoutes(fastify) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.groqApiKey}`,
+        'Authorization': `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
         model: GROQ_MODEL,

@@ -8,3 +8,6 @@ frontend/.env
 .vercel/
 .agent/
 .claude/
+
+.vercel
+.env*.local

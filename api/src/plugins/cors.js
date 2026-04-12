@@ -1,20 +1,15 @@
 import fp from 'fastify-plugin';
 import cors from '@fastify/cors';
-import { config } from '../config.js';
-
-const ALLOWED_ORIGINS = new Set(
-  [
-    config.frontendUrl || 'http://localhost:5173',
-    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
-  ].filter(Boolean)
-);
 
 export default fp(async (fastify) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const vercelUrl   = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+  const allowed     = new Set([frontendUrl, vercelUrl].filter(Boolean));
+
   await fastify.register(cors, {
     origin: (origin, cb) => {
-      // Allow requests with no origin (server-to-server, curl)
       if (!origin) return cb(null, true);
-      if (ALLOWED_ORIGINS.has(origin)) return cb(null, true);
+      if (allowed.has(origin)) return cb(null, true);
       cb(new Error('Not allowed by CORS'), false);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE'],

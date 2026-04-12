@@ -1,21 +1,20 @@
-import Fastify from 'fastify';
-import corsPlugin      from './plugins/cors.js';
-import helmetPlugin    from './plugins/helmet.js';
-import rateLimitPlugin from './plugins/rate-limit.js';
-import supabasePlugin  from './plugins/supabase.js';
-import authPlugin      from './plugins/auth.js';
-import clientesRoutes  from './routes/clientes.js';
-import pedidosRoutes   from './routes/pedidos.js';
-import metricasRoutes  from './routes/metricas.js';
-import aiRoutes        from './routes/ai.js';
-import { config }      from './config.js';
+import Fastify          from 'fastify';
+import corsPlugin        from './plugins/cors.js';
+import helmetPlugin      from './plugins/helmet.js';
+import rateLimitPlugin   from './plugins/rate-limit.js';
+import supabasePlugin    from './plugins/supabase.js';
+import authPlugin        from './plugins/auth.js';
+import clientesRoutes    from './routes/clientes.js';
+import pedidosRoutes     from './routes/pedidos.js';
+import metricasRoutes    from './routes/metricas.js';
+import aiRoutes          from './routes/ai.js';
 
 export async function createApp() {
-  if (!config.supabaseUrl)        throw new Error('Missing env: SUPABASE_URL');
-  if (!config.supabaseServiceKey) throw new Error('Missing env: SUPABASE_SERVICE_KEY');
+  if (!process.env.SUPABASE_URL)         throw new Error('Missing env: SUPABASE_URL');
+  if (!process.env.SUPABASE_SERVICE_KEY) throw new Error('Missing env: SUPABASE_SERVICE_KEY');
 
   const app = Fastify({
-    logger: config.nodeEnv === 'production'
+    logger: process.env.NODE_ENV === 'production'
       ? { level: 'warn' }
       : { level: 'info' },
     trustProxy: true,
@@ -38,7 +37,7 @@ export async function createApp() {
 
   // Sanitized error handler — never leak internals
   app.setErrorHandler((error, request, reply) => {
-    const status = error.statusCode || 500;
+    const status  = error.statusCode || 500;
     const message = status < 500 ? error.message : 'Error interno del servidor';
     request.log.error(error);
     reply.status(status).send({ error: message });
