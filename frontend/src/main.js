@@ -66,6 +66,21 @@ async function loadAll() {
   }
 }
 
+/* ── OUTLOOK SYNC ── */
+async function syncOutlook(pedidoId) {
+  try {
+    setLoader(true, 'Sincronizando con Outlook…');
+    await api.calendar.sync(pedidoId);
+    await loadAll();
+    renderCal();
+    toast('Sincronizado con Outlook ✓', 'ok');
+  } catch (err) {
+    toast('Error al sincronizar con Outlook: ' + err.message, 'er');
+  } finally {
+    setLoader(false);
+  }
+}
+
 /* ── AUTH FLOW ── */
 async function doLogin(e) {
   e.preventDefault();
@@ -150,6 +165,7 @@ window.calNav       = calNav;
 window.calToday     = calToday;
 window.setCalMode   = setCalMode;
 window.goToDay      = goToDay;
+window.syncOutlook  = syncOutlook;
 
 // Tracking
 window.openTrackModal  = openTrackModal;

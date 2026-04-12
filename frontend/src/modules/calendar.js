@@ -41,7 +41,10 @@ function renderCalWeek() {
         const bg = TIPO_BG[p.tipoServicio] || '#f1f5f9', co = TIPO_CO[p.tipoServicio] || '#475569', ic = TIPO_IC[p.tipoServicio] || '📦';
         const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
         const dot = sm ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${STATUS_COLORS[sm.estado] || '#94a3b8'};margin-right:3px"></span>` : '';
-        return `<div class="cal-chip" style="background:${bg};color:${co}" onclick="openPedidoModal(${p.id})"><b>${dot}${ic} ${c ? esc(c.nombre) : 'Sin cliente'}</b><span>${esc(p.tipoServicio)} ${money(p.total)}</span></div>`;
+        const outlookBadge = p.detalles?.outlook_event_id
+          ? `<span title="Sincronizado con Outlook" style="font-size:9px;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;margin-left:3px;vertical-align:middle">📅</span>`
+          : '';
+        return `<div class="cal-chip" style="background:${bg};color:${co}" onclick="openPedidoModal(${p.id})"><b>${dot}${ic} ${c ? esc(c.nombre) : 'Sin cliente'}${outlookBadge}</b><span>${esc(p.tipoServicio)} ${money(p.total)}</span></div>`;
       }).join('')}${!dps.length ? '<div style="font-size:11px;color:var(--mu);padding:5px 3px;text-align:center">—</div>' : ''}</div></div>`;
   });
   html += '</div>';
@@ -66,6 +69,7 @@ function renderCalDay() {
       <div style="display:flex;flex-direction:column;gap:4px">
         <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})">📍</button>
         <button class="btn bw bsm" onclick="openPedidoModal(${p.id})">✏️</button>
+        <button class="btn bsm" style="background:${p.detalles?.outlook_event_id ? '#dcfce7' : '#eff6ff'};color:${p.detalles?.outlook_event_id ? '#15803d' : '#1d4ed8'}" title="${p.detalles?.outlook_event_id ? 'Actualizar en Outlook' : 'Sincronizar con Outlook'}" onclick="syncOutlook(${p.id})">📅</button>
       </div></div>`;
   }).join('');
 }

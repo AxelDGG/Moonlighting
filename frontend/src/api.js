@@ -45,4 +45,7 @@ export const api = {
   ai: {
     feedback:  (data)       => post('/ai/feedback', data),
   },
+  calendar: {
+    sync:      (pedidoId)   => post(`/calendar/sync/${pedidoId}`),
+  },
 };

@@ -44,6 +44,18 @@ export default async function pedidosRoutes(fastify) {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },
   }, async (req, reply) => {
+    // Intentar eliminar el evento de Outlook antes de borrar la fila (para no perder el ID)
+    if (fastify.msGraph) {
+      try {
+        const { data: p } = await fastify.supabase
+          .from('pedidos').select('detalles').eq('id', req.params.id).single();
+        if (p?.detalles?.outlook_event_id) {
+          await fastify.msGraph.deleteEvent(p.detalles.outlook_event_id);
+        }
+      } catch (err) {
+        req.log.warn({ err }, 'Outlook delete event failed (non-fatal)');
+      }
+    }
     const { error } = await fastify.supabase.from('pedidos').delete().eq('id', req.params.id);
     if (error) return reply.code(500).send({ error: 'Error al eliminar pedido' });
     return reply.code(204).send();
