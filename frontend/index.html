@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Moonlighting — Abanicos &amp; Persianas</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="/src/styles/app.css"/>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="lc-wrap">
+    <div class="lc-logo">
+      <div class="lc-logo-n">🌙 Moonlighting</div>
+      <div class="lc-logo-s">Abanicos &amp; Persianas · Monterrey NL</div>
+    </div>
+    <div class="lc-box">
+      <div class="lc-title">Iniciar sesión</div>
+      <div id="l-err"></div>
+      <form id="login-form">
+        <div class="lc-fi">
+          <label>Correo electrónico</label>
+          <input id="l-email" type="email" required autocomplete="username" placeholder="tu@correo.com"/>
+        </div>
+        <div class="lc-fi">
+          <label>Contraseña</label>
+          <input id="l-pass" type="password" required autocomplete="current-password" placeholder="••••••••"/>
+        </div>
+        <button type="submit" class="btn bp lc-btn" id="btn-login">Entrar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<div id="app-shell" style="display:none">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-n">🌙 Moonlighting</div>
+      <div class="logo-s">Abanicos &amp; Persianas · MTY</div>
+    </div>
+    <nav class="nav">
+      <div class="ni-item active" id="nav-dashboard" onclick="showTab('dashboard')"><span class="ic">📊</span>Dashboard</div>
+      <div class="ni-item" id="nav-clientes"  onclick="showTab('clientes')"><span class="ic">👥</span>Clientes</div>
+      <div class="ni-item" id="nav-pedidos"   onclick="showTab('pedidos')"><span class="ic">📦</span>Pedidos</div>
+      <div class="ni-item" id="nav-cal"       onclick="showTab('cal')"><span class="ic">📅</span>Calendario</div>
+      <div class="ni-item" id="nav-mapa"      onclick="showTab('mapa')"><span class="ic">🗺️</span>Mapa</div>
+      <div class="ni-item" id="nav-metricas"  onclick="showTab('metricas')"><span class="ic">📈</span>Métricas</div>
+    </nav>
+    <div class="sf"><span class="sf-dot" id="db-dot"></span><span id="db-status">Conectando…</span></div>
+    <div class="sf-logout">
+      <div class="sf-email" id="user-email"></div>
+      <button class="sf-out" onclick="doLogout()">🚪 Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button id="menu-toggle" class="btn bg bsm" style="display:none;padding:5px 8px;font-size:16px" onclick="toggleSidebar()">☰</button>
+        <h1 id="ptitle">Dashboard</h1>
+      </div>
+      <span class="tb" id="pbadge">…</span>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <section class="tab active" id="tab-dashboard">
+        <div class="stats">
+          <div class="sc"><div class="sico bl">👥</div><div><div class="sv" id="s-c">—</div><div class="sl">Clientes</div></div></div>
+          <div class="sc"><div class="sico gr">🪭</div><div><div class="sv" id="s-a">—</div><div class="sl">Abanicos</div></div></div>
+          <div class="sc"><div class="sico pu">🪟</div><div><div class="sv" id="s-p">—</div><div class="sl">Persianas</div></div></div>
+          <div class="sc"><div class="sico am">💰</div><div><div class="sv" id="s-t">—</div><div class="sl">Ingresos</div></div></div>
+        </div>
+        <div class="two">
+          <div class="card">
+            <div class="ch"><h2>Últimos clientes</h2><button class="btn bp bsm" onclick="showTab('clientes')">Ver todos</button></div>
+            <div class="cb" id="dc"></div>
+          </div>
+          <div class="card">
+            <div class="ch"><h2>Últimos pedidos</h2><button class="btn bp bsm" onclick="showTab('pedidos')">Ver todos</button></div>
+            <div class="cb" id="dp"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section class="tab" id="tab-clientes">
+        <div class="card">
+          <div class="ch"><h2>Registro de Clientes</h2><div style="display:flex;gap:8px;align-items:center"><button class="btn bg bsm" onclick="exportClientes()">📥 Exportar CSV</button><span class="mu" style="font-size:11.5px">Creados automáticamente al agregar un pedido</span></div></div>
+          <div class="cb">
+            <div class="sr"><input class="si" id="qc" placeholder="🔍  Buscar nombre, tel, dirección, municipio…" oninput="renderClientes()"/></div>
+            <div class="tw">
+              <table>
+                <thead><tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Municipio</th><th>Método Pago</th><th>Pedido</th><th class="tr">Acciones</th></tr></thead>
+                <tbody id="tbc"></tbody>
+              </table>
+              <div id="ec" class="empty" style="display:none"><div class="ei">👥</div><p>Sin clientes</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PEDIDOS -->
+      <section class="tab" id="tab-pedidos">
+        <div class="card">
+          <div class="ch"><h2>Registro de Pedidos</h2><div style="display:flex;gap:8px"><button class="btn bg bsm" onclick="exportPedidos()">📥 Exportar CSV</button><button class="btn bp" onclick="openPedidoModal()">＋ Nuevo pedido</button></div></div>
+          <div class="cb">
+            <div class="sr"><input class="si" id="qp" placeholder="🔍  Buscar ID, cliente, servicio, modelo, fecha…" oninput="renderPedidos()"/></div>
+            <div class="tw">
+              <table>
+                <thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Detalle</th><th class="tr">Cant.</th><th>Total</th><th>Estado</th><th class="tr">Acciones</th></tr></thead>
+                <tbody id="tbp"></tbody>
+              </table>
+              <div id="ep" class="empty" style="display:none"><div class="ei">📦</div><p>Sin pedidos</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CALENDARIO -->
+      <section class="tab" id="tab-cal">
+        <div class="card">
+          <div class="ch">
+            <div style="display:flex;gap:7px;align-items:center">
+              <button class="btn bg bsm" onclick="calNav(-1)">◀</button>
+              <span id="cal-title" style="font-weight:600;font-size:13.5px;min-width:200px;text-align:center"></span>
+              <button class="btn bg bsm" onclick="calNav(1)">▶</button>
+              <button class="btn bg bsm" onclick="calToday()">Hoy</button>
+            </div>
+            <div style="display:flex;gap:5px">
+              <button class="btn bp bsm" id="btn-cw" onclick="setCalMode('week')">Semana</button>
+              <button class="btn bg bsm" id="btn-cd" onclick="setCalMode('day')">Día</button>
+            </div>
+          </div>
+          <div class="cb" id="cal-body"></div>
+        </div>
+      </section>
+
+      <!-- MAPA -->
+      <section class="tab" id="tab-mapa">
+        <div class="map-filter-bar">
+          <div class="mf-field">
+            <label>👤 Nombre</label>
+            <input id="mf-nombre" type="text" placeholder="Buscar nombre…" oninput="onMfInput('nombre')" onfocus="onMfFocus('nombre')" onblur="onMfBlur('nombre')" onkeydown="onMfKey(event,'nombre')" autocomplete="off"/>
+            <div class="mf-ac" id="mf-ac-nombre"></div>
+          </div>
+          <div class="mf-field">
+            <label>📞 Teléfono</label>
+            <input id="mf-tel" type="text" placeholder="Buscar teléfono…" oninput="onMfInput('tel')" onfocus="onMfFocus('tel')" onblur="onMfBlur('tel')" onkeydown="onMfKey(event,'tel')" autocomplete="off"/>
+            <div class="mf-ac" id="mf-ac-tel"></div>
+          </div>
+          <div class="mf-field">
+            <label>📍 Dirección</label>
+            <input id="mf-dir" type="text" placeholder="Buscar dirección…" oninput="onMfInput('dir')" onfocus="onMfFocus('dir')" onblur="onMfBlur('dir')" onkeydown="onMfKey(event,'dir')" autocomplete="off"/>
+            <div class="mf-ac" id="mf-ac-dir"></div>
+          </div>
+          <div class="mf-bar-section">
+            <div class="mf-chips-bar" id="mf-chips"></div>
+          </div>
+          <div class="mf-bar-section">
+            <span class="mf-bar-count" id="mf-count">—</span>
+            <button class="mf-bar-reset" id="mf-reset" onclick="resetMapFilter()">↺ Limpiar</button>
+          </div>
+        </div>
+        <div style="position:relative">
+          <div id="map"></div>
+          <div id="muni-legend"><h4>Municipios</h4><div id="legend-items"></div></div>
+          <div id="status-legend">
+            <h4>Estado del servicio</h4>
+            <div class="sl-item"><div class="sl-dot" style="background:#22c55e"></div>Completado</div>
+            <div class="sl-item"><div class="sl-dot" style="background:#3b82f6"></div>En curso</div>
+            <div class="sl-item"><div class="sl-dot" style="background:#ef4444"></div>Atrasado</div>
+            <div class="sl-item"><div class="sl-dot" style="background:#f59e0b"></div>Programado</div>
+            <div class="sl-item"><div class="sl-dot" style="background:#94a3b8"></div>Sin seguimiento</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MÉTRICAS -->
+      <section class="tab" id="tab-metricas">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn bp" id="btn-ai" onclick="generateFeedback()">🤖 Generar retroalimentación IA</button>
+        </div>
+        <div class="met-grid" id="met-kpis"></div>
+        <div class="two">
+          <div class="card"><div class="ch"><h2>📊 Cumplimiento de servicios</h2></div><div class="cb" id="met-donut"></div></div>
+          <div class="card"><div class="ch"><h2>🗺️ Retraso promedio por zona</h2></div><div class="cb" id="met-zona"></div></div>
+        </div>
+        <div class="two">
+          <div class="card"><div class="ch"><h2>🔧 Retraso por tipo de servicio</h2></div><div class="cb" id="met-tipo"></div></div>
+          <div class="card"><div class="ch"><h2>👷 Eficiencia por técnico</h2></div><div class="cb" id="met-tecnico"></div></div>
+        </div>
+        <div class="two">
+          <div class="card"><div class="ch"><h2>📅 Retraso por día de la semana</h2></div><div class="cb" id="met-dia"></div></div>
+          <div class="card"><div class="ch"><h2>🚫 Motivos de retraso/cancelación</h2></div><div class="cb" id="met-motivos"></div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><h2>🕐 Historial reciente de seguimiento</h2></div>
+          <div class="cb">
+            <div class="tw">
+              <table>
+                <thead><tr><th>Pedido</th><th>Cliente</th><th>Servicio</th><th>Zona</th><th>Técnico</th><th>Prog.</th><th>Llegada</th><th>Retraso</th><th>Duración</th><th>Estado</th></tr></thead>
+                <tbody id="tb-met-hist"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="ai-card" style="display:none">
+          <div class="ch">
+            <h2>🤖 Análisis operativo — IA</h2>
+            <button class="btn bg bsm" onclick="generateFeedback()" id="btn-ai-regen">↺ Regenerar</button>
+          </div>
+          <div class="cb" id="ai-body"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODALS -->
+
+<!-- Cliente -->
+<div class="ov" id="ov-cli">
+  <div class="modal">
+    <div class="mh"><h3>Editar Cliente</h3><button class="mc" onclick="closeOv('ov-cli')">✕</button></div>
+    <div class="mb">
+      <form id="fc" onsubmit="submitCliente(event)">
+        <input type="hidden" id="c-eid"/>
+        <div class="fg">
+          <div class="fi"><label>Nombre *</label><input id="c-n" type="text" required/></div>
+          <div class="fi"><label>Teléfono *</label><input id="c-t" type="tel" required/></div>
+          <div class="fi full"><label>Dirección *</label><input id="c-d" type="text" required/></div>
+          <div class="fi"><label>Método de pago</label>
+            <select id="c-p"><option value="Efectivo">💵 Efectivo</option><option value="Tarjeta">💳 Tarjeta</option><option value="Transferencia">🏦 Transferencia</option><option value="Credito">📝 Crédito</option></select>
+          </div>
+          <div class="fi"><label>N° Pedido</label><input id="c-np" type="text"/></div>
+        </div>
+        <div class="fa"><button type="button" class="btn bg" onclick="closeOv('ov-cli')">Cancelar</button><button type="submit" class="btn bp" id="btn-sc">Guardar</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Pedido -->
+<div class="ov" id="ov-ped">
+  <div class="modal">
+    <div class="mh"><h3 id="mp-t">Nuevo Pedido</h3><button class="mc" onclick="closeOv('ov-ped')">✕</button></div>
+    <div class="mb">
+      <form id="fp" onsubmit="submitPedido(event)">
+        <input type="hidden" id="p-eid"/>
+        <div class="fg">
+          <div class="fi full">
+            <label>Cliente</label>
+            <div class="mode-btns">
+              <button type="button" class="mode-btn on" id="btn-ex" onclick="setCliMode('ex')">Existente</button>
+              <button type="button" class="mode-btn"    id="btn-nw" onclick="setCliMode('nw')">＋ Nuevo cliente</button>
+            </div>
+            <div id="cli-ex"><select id="p-ce" style="width:100%;padding:7px 10px;border:1px solid var(--bo);border-radius:7px;font-size:13px;outline:none;font-family:inherit"></select></div>
+            <div id="cli-nw" style="display:none">
+              <div class="fg" style="margin-top:0">
+                <div class="fi"><label>Nombre *</label><input id="nc-n" type="text" placeholder="Juan Pérez"/></div>
+                <div class="fi"><label>Teléfono *</label><input id="nc-t" type="tel" placeholder="+52 81 …"/></div>
+                <div class="fi full"><label>Dirección *</label><input id="nc-d" type="text" placeholder="Av. Constitución 1500, MTY"/></div>
+              </div>
+            </div>
+          </div>
+          <div class="fi"><label>Tipo de servicio *</label>
+            <select id="p-tipo" onchange="updatePF()" required>
+              <option value="">— Seleccionar —</option>
+              <option value="Abanico">🪭 Abanico de Techo</option>
+              <option value="Persiana">🪟 Persiana</option>
+              <option value="Levantamiento">📐 Levantamiento (medidas)</option>
+              <option value="Limpieza">🧹 Limpieza de Abanico</option>
+              <option value="Mantenimiento">🔧 Mantenimiento</option>
+            </select>
+          </div>
+          <div class="fi"><label>Fecha *</label><input id="p-fecha" type="date" required/></div>
+          <div class="fi full fdiv" id="r-ab-hd" style="display:none">Detalles Abanico</div>
+          <div class="fi full" id="r-modelo" style="display:none"><label>Modelo *</label><input id="p-modelo" type="text"/></div>
+          <div class="fi" id="r-ndesins" style="display:none"><label>Desinstalar</label><input id="p-ndesins" type="number" min="0" value="0" oninput="calcExtra()"/><span id="desins-hint" style="font-size:11px;color:var(--wa)"></span></div>
+          <div class="fi full fdiv" id="r-pe-hd" style="display:none">Detalles Persiana</div>
+          <div class="fi" id="r-ancho" style="display:none"><label>Ancho (cm)</label><input id="p-ancho" type="number"/></div>
+          <div class="fi" id="r-alto"  style="display:none"><label>Alto (cm)</label><input id="p-alto"  type="number"/></div>
+          <div class="fi" id="r-inst"  style="display:none"><label>Instalación</label><select id="p-inst"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></div>
+          <div class="fi" id="r-tela"  style="display:none"><label>Tela</label><select id="p-tela"><option>Screen 3%</option><option>Screen 5%</option><option>Blackout</option><option>Zebra</option></select></div>
+          <div class="fi full fdiv" id="r-nt-hd" style="display:none">Notas adicionales</div>
+          <div class="fi full" id="r-notas" style="display:none"><label>Notas</label><textarea id="p-notas" rows="2"></textarea></div>
+          <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required/></div>
+          <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required/></div>
+          <div class="fi full"><label>Pago</label>
+            <select id="p-pago"><option value="Efectivo">💵 Efectivo</option><option value="Tarjeta">💳 Tarjeta</option><option value="Transferencia">🏦 Transferencia</option><option value="Credito">📝 Crédito</option></select>
+          </div>
+          <div class="fi full fdiv">Tracking</div>
+          <div class="fi"><label>Hora Prog.</label><input id="p-hora-prog" type="time"/></div>
+          <div class="fi"><label>Técnico</label>
+            <select id="p-tecnico"><option value="">— Ninguno —</option><option value="Carlos R.">Carlos R.</option><option value="Miguel A.">Miguel A.</option><option value="José L.">José L.</option></select>
+          </div>
+          <div class="fi"><label>Ruta #</label><input id="p-orden-ruta" type="number" min="1"/></div>
+        </div>
+        <div class="fa"><button type="button" class="btn bg" onclick="closeOv('ov-ped')">Cancelar</button><button type="submit" class="btn bp" id="btn-sp">Guardar</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Tracking -->
+<div class="ov" id="ov-track">
+  <div class="modal" style="width:500px">
+    <div class="mh"><h3 id="track-title">Seguimiento</h3><button class="mc" onclick="closeOv('ov-track')">✕</button></div>
+    <div class="mb" id="track-body"></div>
+  </div>
+</div>
+
+<div id="loader"><span class="sp sp-lg"></span><p id="loader-msg">Cargando…</p></div>
+<div id="toasts"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/src/main.js"></script>
+
+</body>
+</html>
