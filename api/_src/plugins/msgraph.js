@@ -59,7 +59,7 @@ export default fp(async (fastify) => {
 
     return {
       subject: `${ic} ${pedido.tipo_servicio} – ${nombre}`,
-      body:     { contentType: 'HTML', content: bodyLines },
+      body:     { contentType: 'html', content: bodyLines },
       start:    { dateTime: `${pedido.fecha}T${hora}:00`, timeZone: 'America/Monterrey' },
       end:      { dateTime: `${pedido.fecha}T${fin}:00`,  timeZone: 'America/Monterrey' },
       location: { displayName: dir },

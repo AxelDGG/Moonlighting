@@ -28,23 +28,27 @@ export default async function calendarRoutes(fastify) {
       ? (await fastify.supabase.from('clientes').select('*').eq('id', pedido.cliente_id).single()).data
       : null;
 
-    const payload        = fastify.msGraph.buildEventPayload(pedido, metrica, cliente);
-    const existingEventId = pedido.detalles?.outlook_event_id;
+    try {
+      const payload         = fastify.msGraph.buildEventPayload(pedido, metrica, cliente);
+      const existingEventId = pedido.detalles?.outlook_event_id;
 
-    let eventId;
-    if (existingEventId) {
-      await fastify.msGraph.updateEvent(existingEventId, payload);
-      eventId = existingEventId;
-    } else {
-      const event = await fastify.msGraph.createEvent(payload);
-      eventId     = event.id;
-      // Guardar el ID del evento de Outlook en pedidos.detalles
-      await fastify.supabase
-        .from('pedidos')
-        .update({ detalles: { ...(pedido.detalles || {}), outlook_event_id: eventId } })
-        .eq('id', pedidoId);
+      let eventId;
+      if (existingEventId) {
+        await fastify.msGraph.updateEvent(existingEventId, payload);
+        eventId = existingEventId;
+      } else {
+        const event = await fastify.msGraph.createEvent(payload);
+        eventId     = event.id;
+        await fastify.supabase
+          .from('pedidos')
+          .update({ detalles: { ...(pedido.detalles || {}), outlook_event_id: eventId } })
+          .eq('id', pedidoId);
+      }
+
+      return reply.send({ ok: true, eventId });
+    } catch (err) {
+      req.log.error({ err }, 'Outlook sync failed');
+      return reply.code(500).send({ error: err.message });
     }
-
-    return reply.send({ ok: true, eventId });
   });
 }
