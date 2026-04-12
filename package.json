@@ -4,7 +4,7 @@
   "workspaces": ["frontend", "api"],
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w frontend\"",
-    "build": "npm run build -w frontend",
+    "build": "npm run build --prefix frontend",
     "start:api": "npm run dev -w api"
   },
   "devDependencies": {
