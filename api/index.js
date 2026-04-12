@@ -1,4 +1,4 @@
-import { createApp } from './src/app.js';
+import { createApp } from './_src/app.js';
 
 // Module-level singleton — reused across warm Vercel invocations
 let app = null;
