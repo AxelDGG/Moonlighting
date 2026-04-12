@@ -3,8 +3,10 @@ import cors from '@fastify/cors';
 import { config } from '../config.js';
 
 const ALLOWED_ORIGINS = new Set(
-  [config.frontendUrl, process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null]
-    .filter(Boolean)
+  [
+    config.frontendUrl || 'http://localhost:5173',
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  ].filter(Boolean)
 );
 
 export default fp(async (fastify) => {

@@ -2,5 +2,6 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 
 const app = await createApp();
-await app.listen({ port: config.port, host: '0.0.0.0' });
-console.log(`API corriendo en http://localhost:${config.port}`);
+const port = Number(process.env.PORT) || 3001;
+await app.listen({ port, host: '0.0.0.0' });
+console.log(`API corriendo en http://localhost:${port}`);
