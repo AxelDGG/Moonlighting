@@ -959,6 +959,64 @@ code { font-family: 'Consolas', monospace; background: #f1f5f9; padding: 2px 5px
 @keyframes pulse-marker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 @keyframes pulse-ring { 0% { transform: scale(1); opacity: .4; } 100% { transform: scale(1.8); opacity: 0; } }
 
+/* ── AUTOCOMPLETE (pedidos form) ── */
+.ac-wrap {
+    position: relative;
+}
+
+.ac-wrap input {
+    width: 100%;
+}
+
+.ac-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid var(--bo);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 210px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}
+
+.ac-list.open { display: block; }
+
+.ac-item {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--bo);
+    transition: background .1s;
+}
+
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.focused { background: #f1f5f9; }
+
+.ac-item-name { flex: 1; font-weight: 500; }
+.ac-item-name mark { background: #fef08a; color: inherit; border-radius: 2px; padding: 0 1px; font-weight: 600; font-style: normal; }
+.ac-item-meta { font-size: 11px; color: var(--mu); white-space: nowrap; flex-shrink: 0; }
+
+.ac-item-stock {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ac-stock-ok { background: #dcfce7; color: #15803d; }
+.ac-stock-lo { background: #fef3c7; color: #92400e; }
+.ac-stock-no { background: #fee2e2; color: #ef4444; }
+
 /* ── MOBILE RESPONSIVENESS ── */
 @media (max-width: 860px) {
   #app-shell { flex-direction: column; }

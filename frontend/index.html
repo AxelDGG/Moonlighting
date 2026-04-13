@@ -45,6 +45,7 @@
       <div class="ni-item active" id="nav-dashboard" onclick="showTab('dashboard')"><span class="ic">📊</span>Dashboard</div>
       <div class="ni-item" id="nav-clientes"  onclick="showTab('clientes')"><span class="ic">👥</span>Clientes</div>
       <div class="ni-item" id="nav-pedidos"   onclick="showTab('pedidos')"><span class="ic">📦</span>Pedidos</div>
+      <div class="ni-item" id="nav-almacen"   onclick="showTab('almacen')"><span class="ic">🗄️</span>Almacén</div>
       <div class="ni-item" id="nav-cal"       onclick="showTab('cal')"><span class="ic">📅</span>Calendario</div>
       <div class="ni-item" id="nav-mapa"      onclick="showTab('mapa')"><span class="ic">🗺️</span>Mapa</div>
       <div class="ni-item" id="nav-metricas"  onclick="showTab('metricas')"><span class="ic">📈</span>Métricas</div>
@@ -115,6 +116,45 @@
                 <tbody id="tbp"></tbody>
               </table>
               <div id="ep" class="empty" style="display:none"><div class="ei">📦</div><p>Sin pedidos</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALMACÉN -->
+      <section class="tab" id="tab-almacen">
+        <div class="card">
+          <div class="ch">
+            <h2>Inventario / Almacenamiento</h2>
+            <button class="btn bp" onclick="openAlmacenModal()">＋ Nueva entrada</button>
+          </div>
+          <div class="cb">
+            <div class="sr">
+              <input class="si" id="qa" placeholder="🔍  Buscar modelo, lugar, notas…" oninput="renderAlmacenamiento()"/>
+              <select id="fa-cat" class="si" style="flex:0;min-width:150px" onchange="renderAlmacenamiento()">
+                <option value="">Todos</option>
+                <option value="abanico">🪭 Abanicos</option>
+                <option value="persiana">🪟 Persianas</option>
+              </select>
+            </div>
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Modelo</th>
+                    <th>Tipo</th>
+                    <th>Lugar</th>
+                    <th class="tr">Cantidad</th>
+                    <th>Precio</th>
+                    <th>Notas</th>
+                    <th>Actualizado</th>
+                    <th class="tr">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tba"></tbody>
+              </table>
+              <div id="ea" class="empty" style="display:none"><div class="ei">🗄️</div><p>Sin entradas en el inventario</p></div>
             </div>
           </div>
         </div>
@@ -279,21 +319,60 @@
             </select>
           </div>
           <div class="fi"><label>Fecha *</label><input id="p-fecha" type="date" required/></div>
+
+          <!-- ── ABANICO ── -->
           <div class="fi full fdiv" id="r-ab-hd" style="display:none">Detalles Abanico</div>
-          <div class="fi full" id="r-modelo" style="display:none"><label>Modelo *</label><input id="p-modelo" type="text"/></div>
-          <div class="fi" id="r-ndesins" style="display:none"><label>Desinstalar</label><input id="p-ndesins" type="number" min="0" value="0" oninput="calcExtra()"/><span id="desins-hint" style="font-size:11px;color:var(--wa)"></span></div>
+          <div class="fi full" id="r-modelo" style="display:none">
+            <label>Modelo *</label>
+            <div class="ac-wrap">
+              <input id="p-modelo" type="text" autocomplete="off" placeholder="Escribe para buscar modelo…"
+                     oninput="onModeloInput()" onkeydown="onModeloKey(event)" onblur="onModeloBlur()"/>
+              <div class="ac-list" id="ac-modelo"></div>
+            </div>
+            <div id="modelo-info" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+          </div>
+          <div class="fi" id="r-ndesins" style="display:none">
+            <label>Desinstalar</label>
+            <input id="p-ndesins" type="number" min="0" value="0" oninput="calcExtra()"/>
+            <span id="desins-hint" style="font-size:11px;color:var(--wa)"></span>
+          </div>
+
+          <!-- ── PERSIANA ── -->
           <div class="fi full fdiv" id="r-pe-hd" style="display:none">Detalles Persiana</div>
-          <div class="fi" id="r-ancho" style="display:none"><label>Ancho (cm)</label><input id="p-ancho" type="number"/></div>
-          <div class="fi" id="r-alto"  style="display:none"><label>Alto (cm)</label><input id="p-alto"  type="number"/></div>
-          <div class="fi" id="r-inst"  style="display:none"><label>Instalación</label><select id="p-inst"><option value="interior">Interior</option><option value="exterior">Exterior</option></select></div>
-          <div class="fi" id="r-tela"  style="display:none"><label>Tela</label><select id="p-tela"><option>Screen 3%</option><option>Screen 5%</option><option>Blackout</option><option>Zebra</option></select></div>
+          <div class="fi" id="r-ancho" style="display:none">
+            <label>Ancho (cm)</label>
+            <input id="p-ancho" type="number" oninput="calcPedidoTotal()"/>
+          </div>
+          <div class="fi" id="r-alto" style="display:none">
+            <label>Alto (cm)</label>
+            <input id="p-alto" type="number" oninput="calcPedidoTotal()"/>
+          </div>
+          <div class="fi" id="r-inst" style="display:none">
+            <label>Instalación</label>
+            <select id="p-inst"><option value="interior">Interior</option><option value="exterior">Exterior</option></select>
+          </div>
+          <div class="fi full" id="r-tela" style="display:none">
+            <label>Tela</label>
+            <div class="ac-wrap">
+              <input id="p-tela" type="text" autocomplete="off" placeholder="Escribe para buscar tela…"
+                     oninput="onTelaInput()" onkeydown="onTelaKey(event)" onblur="onTelaBlur()"/>
+              <div class="ac-list" id="ac-tela"></div>
+            </div>
+            <div id="tela-info" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+          </div>
+
+          <!-- ── NOTAS ── -->
           <div class="fi full fdiv" id="r-nt-hd" style="display:none">Notas adicionales</div>
           <div class="fi full" id="r-notas" style="display:none"><label>Notas</label><textarea id="p-notas" rows="2"></textarea></div>
-          <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required/></div>
+
+          <!-- ── COMUNES ── -->
+          <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required oninput="calcPedidoTotal()"/></div>
           <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required/></div>
           <div class="fi full"><label>Pago</label>
             <select id="p-pago"><option value="Efectivo">💵 Efectivo</option><option value="Tarjeta">💳 Tarjeta</option><option value="Transferencia">🏦 Transferencia</option><option value="Credito">📝 Crédito</option></select>
           </div>
+
+          <!-- ── TRACKING ── -->
           <div class="fi full fdiv">Tracking</div>
           <div class="fi"><label>Hora Prog.</label><input id="p-hora-prog" type="time"/></div>
           <div class="fi"><label>Técnico</label>
@@ -312,6 +391,42 @@
   <div class="modal" style="width:500px">
     <div class="mh"><h3 id="track-title">Seguimiento</h3><button class="mc" onclick="closeOv('ov-track')">✕</button></div>
     <div class="mb" id="track-body"></div>
+  </div>
+</div>
+
+<!-- Almacén -->
+<div class="ov" id="ov-almacen">
+  <div class="modal" style="width:520px">
+    <div class="mh"><h3 id="ma-t">Nueva Entrada</h3><button class="mc" onclick="closeOv('ov-almacen')">✕</button></div>
+    <div class="mb">
+      <form id="fa" onsubmit="submitAlmacen(event)">
+        <input type="hidden" id="a-eid"/>
+        <div class="fg">
+          <div class="fi full"><label>Modelo *</label><input id="a-modelo" type="text" required placeholder="Ej: Hunter Pacific Elite 52&quot; o Screen 3%"/></div>
+          <div class="fi"><label>Categoría *</label>
+            <select id="a-cat" required>
+              <option value="abanico">🪭 Abanico</option>
+              <option value="persiana">🪟 Persiana / Tela</option>
+            </select>
+          </div>
+          <div class="fi"><label>Lugar *</label>
+            <select id="a-lugar" required>
+              <option value="Bodega">🏭 Bodega</option>
+              <option value="Casa">🏠 Casa</option>
+              <option value="Camioneta Nueva">🚚 Camioneta Nueva</option>
+              <option value="Camioneta Vieja">🚛 Camioneta Vieja</option>
+            </select>
+          </div>
+          <div class="fi"><label>Cantidad *</label><input id="a-qty" type="number" min="0" required value="0"/></div>
+          <div class="fi"><label>Precio ($/ud o $/m²) *</label><input id="a-precio" type="number" min="0" step="0.01" required value="0"/></div>
+          <div class="fi full"><label>Notas</label><textarea id="a-notas" rows="2" placeholder="Observaciones opcionales…"></textarea></div>
+        </div>
+        <div class="fa">
+          <button type="button" class="btn bg" onclick="closeOv('ov-almacen')">Cancelar</button>
+          <button type="submit" class="btn bp" id="btn-sa">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 

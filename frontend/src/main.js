@@ -1,21 +1,25 @@
 import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
-import { state, cFromDb, pFromDb, smFromDb } from './state.js';
+import { state, cFromDb, pFromDb, smFromDb, aFromDb } from './state.js';
 import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
 
 import { renderDash } from './modules/dashboard.js';
 import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, exportClientes } from './modules/clientes.js';
-import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode } from './modules/pedidos.js';
+import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
+         calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
+         onTelaInput, onTelaKey, onTelaBlur, selectTela } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
+import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen } from './modules/almacenamiento.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
   dashboard: 'Dashboard',
   clientes:  'Clientes',
   pedidos:   'Pedidos',
+  almacen:   'Almacén',
   cal:       'Calendario',
   mapa:      'Mapa',
   metricas:  'Métricas',
@@ -31,12 +35,13 @@ function showTab(name) {
   if (nav) nav.classList.add('active');
   document.getElementById('ptitle').textContent = TAB_TITLES[name] || name;
 
-  if (name === 'dashboard') renderDash();
-  else if (name === 'clientes') renderClientes();
-  else if (name === 'pedidos') renderPedidos();
-  else if (name === 'cal') renderCal();
-  else if (name === 'mapa') initMap();
-  else if (name === 'metricas') renderMetricas();
+  if      (name === 'dashboard') renderDash();
+  else if (name === 'clientes')  renderClientes();
+  else if (name === 'pedidos')   renderPedidos();
+  else if (name === 'almacen')   renderAlmacenamiento();
+  else if (name === 'cal')       renderCal();
+  else if (name === 'mapa')      initMap();
+  else if (name === 'metricas')  renderMetricas();
 
   // Close sidebar on mobile
   const sidebar = document.querySelector('.sidebar');
@@ -47,14 +52,16 @@ function showTab(name) {
 async function loadAll() {
   setLoader(true, 'Cargando datos…');
   try {
-    const [clientes, pedidos, metricas] = await Promise.all([
+    const [clientes, pedidos, metricas, almacenamiento] = await Promise.all([
       api.clientes.getAll(),
       api.pedidos.getAll(),
       api.metricas.getAll(),
+      api.almacenamiento.getAll(),
     ]);
-    state.clientes = clientes.map(cFromDb);
-    state.pedidos = pedidos.map(pFromDb);
+    state.clientes          = clientes.map(cFromDb);
+    state.pedidos           = pedidos.map(pFromDb);
     state.servicios_metricas = metricas.map(smFromDb);
+    state.almacenamiento    = almacenamiento.map(aFromDb);
     setDbStatus(true);
     renderDash();
     badge(state.pedidos.length + ' pedidos');
@@ -150,14 +157,23 @@ window.exportClientes   = exportClientes;
 window.renderClientes   = renderClientes;
 
 // Pedidos
-window.openPedidoModal = openPedidoModal;
-window.submitPedido    = submitPedido;
-window.deletePedido    = deletePedido;
-window.exportPedidos   = exportPedidos;
-window.updatePF        = updatePF;
-window.calcExtra       = calcExtra;
-window.setCliMode      = setCliMode;
-window.renderPedidos   = renderPedidos;
+window.openPedidoModal  = openPedidoModal;
+window.submitPedido     = submitPedido;
+window.deletePedido     = deletePedido;
+window.exportPedidos    = exportPedidos;
+window.updatePF         = updatePF;
+window.calcExtra        = calcExtra;
+window.setCliMode       = setCliMode;
+window.renderPedidos    = renderPedidos;
+window.calcPedidoTotal  = calcPedidoTotal;
+window.onModeloInput    = onModeloInput;
+window.onModeloKey      = onModeloKey;
+window.onModeloBlur     = onModeloBlur;
+window.selectModelo     = selectModelo;
+window.onTelaInput      = onTelaInput;
+window.onTelaKey        = onTelaKey;
+window.onTelaBlur       = onTelaBlur;
+window.selectTela       = selectTela;
 
 // Calendar
 window.renderCal    = renderCal;
@@ -187,8 +203,14 @@ window.resetMapFilter  = resetMapFilter;
 window.openOv  = openOv;
 window.closeOv = closeOv;
 
-// Metricas
+// Métricas
 window.generateFeedback = generateFeedback;
+
+// Almacén
+window.renderAlmacenamiento = renderAlmacenamiento;
+window.openAlmacenModal     = openAlmacenModal;
+window.submitAlmacen        = submitAlmacen;
+window.deleteAlmacen        = deleteAlmacen;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();

@@ -5,11 +5,12 @@ import rateLimitPlugin   from './plugins/rate-limit.js';
 import supabasePlugin    from './plugins/supabase.js';
 import authPlugin        from './plugins/auth.js';
 import msgraphPlugin     from './plugins/msgraph.js';
-import clientesRoutes    from './routes/clientes.js';
-import pedidosRoutes     from './routes/pedidos.js';
-import metricasRoutes    from './routes/metricas.js';
-import aiRoutes          from './routes/ai.js';
-import calendarRoutes    from './routes/calendar.js';
+import clientesRoutes        from './routes/clientes.js';
+import pedidosRoutes         from './routes/pedidos.js';
+import metricasRoutes        from './routes/metricas.js';
+import aiRoutes              from './routes/ai.js';
+import calendarRoutes        from './routes/calendar.js';
+import almacenamientoRoutes  from './routes/almacenamiento.js';
 
 export async function createApp() {
   if (!process.env.SUPABASE_URL)         throw new Error('Missing env: SUPABASE_URL');
@@ -33,11 +34,12 @@ export async function createApp() {
   await app.register(msgraphPlugin);
 
   // Routes
-  await app.register(clientesRoutes,  { prefix: '/api/clientes' });
-  await app.register(pedidosRoutes,   { prefix: '/api/pedidos' });
-  await app.register(metricasRoutes,  { prefix: '/api/metricas' });
-  await app.register(aiRoutes,        { prefix: '/api/ai' });
-  await app.register(calendarRoutes,  { prefix: '/api/calendar' });
+  await app.register(clientesRoutes,       { prefix: '/api/clientes' });
+  await app.register(pedidosRoutes,        { prefix: '/api/pedidos' });
+  await app.register(metricasRoutes,       { prefix: '/api/metricas' });
+  await app.register(aiRoutes,             { prefix: '/api/ai' });
+  await app.register(calendarRoutes,       { prefix: '/api/calendar' });
+  await app.register(almacenamientoRoutes, { prefix: '/api/almacenamiento' });
 
   // Sanitized error handler — never leak internals
   app.setErrorHandler((error, request, reply) => {

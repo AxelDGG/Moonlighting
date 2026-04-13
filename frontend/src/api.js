@@ -43,6 +43,12 @@ export const api = {
     create:    (data)       => post('/metricas', data),
     update:    (id, data)   => put(`/metricas/${id}`, data),
   },
+  almacenamiento: {
+    getAll:    ()           => get('/almacenamiento'),
+    create:    (data)       => post('/almacenamiento', data),
+    update:    (id, data)   => put(`/almacenamiento/${id}`, data),
+    delete:    (id)         => del(`/almacenamiento/${id}`),
+  },
   ai: {
     feedback:  (data)       => post('/ai/feedback', data),
   },
