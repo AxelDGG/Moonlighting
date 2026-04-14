@@ -52,16 +52,12 @@ function showTab(name) {
 async function loadAll() {
   setLoader(true, 'Cargando datos…');
   try {
-    const [clientes, pedidos, metricas, almacenamiento] = await Promise.all([
+    const [clientes, pedidos] = await Promise.all([
       api.clientes.getAll(),
       api.pedidos.getAll(),
-      api.metricas.getAll(),
-      api.almacenamiento.getAll(),
     ]);
-    state.clientes          = clientes.map(cFromDb);
-    state.pedidos           = pedidos.map(pFromDb);
-    state.servicios_metricas = metricas.map(smFromDb);
-    state.almacenamiento    = almacenamiento.map(aFromDb);
+    state.clientes = clientes.map(cFromDb);
+    state.pedidos  = pedidos.map(pFromDb);
     setDbStatus(true);
     renderDash();
     badge(state.pedidos.length + ' pedidos');
@@ -71,6 +67,17 @@ async function loadAll() {
   } finally {
     setLoader(false);
   }
+
+  // Carga datos legacy en paralelo — fallan silenciosamente si la tabla no existe
+  try {
+    const metricas = await api.metricas.getAll();
+    state.servicios_metricas = metricas.map(smFromDb);
+  } catch { /* tabla servicios_metricas puede no existir */ }
+
+  try {
+    const almacenamiento = await api.almacenamiento.getAll();
+    state.almacenamiento = almacenamiento.map(aFromDb);
+  } catch { /* tabla almacenamiento puede no existir */ }
 }
 
 /* ── OUTLOOK SYNC ── */

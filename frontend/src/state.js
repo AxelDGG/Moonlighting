@@ -21,6 +21,10 @@ export const state = {
 
   // Histórico
   clienteInteracciones: [],
+
+  // Legacy (compatibilidad — tablas antiguas aún en uso)
+  servicios_metricas: [],
+  almacenamiento: [],
 };
 
 // ============= CLIENTES =============
