@@ -20,107 +20,111 @@ async function request(method, path, body = null) {
   return res.status === 204 ? null : res.json();
 }
 
-const get  = (path)        => request('GET',    path);
-const post = (path, body)  => request('POST',   path, body);
-const put  = (path, body)  => request('PUT',    path, body);
-const del  = (path)        => request('DELETE', path);
+const get  = (path)       => request('GET',    path);
+const post = (path, body) => request('POST',   path, body);
+const put  = (path, body) => request('PUT',    path, body);
+const del  = (path)       => request('DELETE', path);
 
 export const api = {
   // ========== CLIENTES ==========
   clientes: {
-    getAll:           ()           => get('/clientes'),
-    getById:          (id)         => get(`/clientes/${id}`),
-    create:           (data)       => post('/clientes', data),
-    update:           (id, data)   => put(`/clientes/${id}`, data),
-    delete:           (id)         => del(`/clientes/${id}`),
-    direcciones:      (id)         => get(`/clientes/${id}/direcciones`),
-    addDireccion:     (id, dir)    => post(`/clientes/${id}/direcciones`, dir),
+    getAll:       ()         => get('/clientes'),
+    getById:      (id)       => get(`/clientes/${id}`),
+    create:       (data)     => post('/clientes', data),
+    update:       (id, data) => put(`/clientes/${id}`, data),
+    delete:       (id)       => del(`/clientes/${id}`),
+    direcciones:  (id)       => get(`/clientes/${id}/direcciones`),
+    addDireccion: (id, dir)  => post(`/clientes/${id}/direcciones`, dir),
   },
 
   // ========== PEDIDOS ==========
   pedidos: {
-    getAll:           ()           => get('/pedidos'),
-    getById:          (id)         => get(`/pedidos/${id}`),
-    create:           (data)       => post('/pedidos', data),
-    update:           (id, data)   => put(`/pedidos/${id}`, data),
-    delete:           (id)         => del(`/pedidos/${id}`),
-    detalle:          (id)         => get(`/pedidos/${id}/detalle`),
-    addDetalle:       (id, det)    => post(`/pedidos/${id}/detalle`, det),
-    updateDetalle:    (id, det)    => put(`/pedidos/detalle/${id}`, det),
-    deleteDetalle:    (id)         => del(`/pedidos/detalle/${id}`),
+    getAll:        ()         => get('/pedidos'),
+    getById:       (id)       => get(`/pedidos/${id}`),
+    create:        (data)     => post('/pedidos', data),
+    update:        (id, data) => put(`/pedidos/${id}`, data),
+    delete:        (id)       => del(`/pedidos/${id}`),
+    detalle:       (id)       => get(`/pedidos/${id}/detalle`),
+    addDetalle:    (id, det)  => post(`/pedidos/${id}/detalle`, det),
+    updateDetalle: (id, det)  => put(`/pedidos/detalle/${id}`, det),
+    deleteDetalle: (id)       => del(`/pedidos/detalle/${id}`),
   },
 
   // ========== SERVICIOS ==========
   servicios: {
-    getAll:           ()           => get('/servicios'),
-    getById:          (id)         => get(`/servicios/${id}`),
-    create:           (data)       => post('/servicios', data),
-    update:           (id, data)   => put(`/servicios/${id}`, data),
-    delete:           (id)         => del(`/servicios/${id}`),
-    porFecha:         (fecha)      => get(`/servicios/fecha/${fecha}`),
-    porTecnico:       (tecId)      => get(`/servicios/tecnico/${tecId}`),
+    getAll:     ()         => get('/servicios'),
+    getById:    (id)       => get(`/servicios/${id}`),
+    create:     (data)     => post('/servicios', data),
+    update:     (id, data) => put(`/servicios/${id}`, data),
+    delete:     (id)       => del(`/servicios/${id}`),
+    porFecha:   (fecha)    => get(`/servicios/fecha/${fecha}`),
+    porTecnico: (tecId)    => get(`/servicios/tecnico/${tecId}`),
   },
 
   // ========== PAGOS ==========
   pagos: {
-    porPedido:        (pedId)      => get(`/pagos/pedido/${pedId}`),
-    getAll:           ()           => get('/pagos'),
-    create:           (data)       => post('/pagos', data),
-    update:           (id, data)   => put(`/pagos/${id}`, data),
-    delete:           (id)         => del(`/pagos/${id}`),
+    porPedido: (pedId)    => get(`/pagos/pedido/${pedId}`),
+    getAll:    ()         => get('/pagos'),
+    create:    (data)     => post('/pagos', data),
+    update:    (id, data) => put(`/pagos/${id}`, data),
+    delete:    (id)       => del(`/pagos/${id}`),
   },
 
   // ========== CATÁLOGO ==========
   catalogo: {
-    getAll:           ()           => get('/catalogo'),
-    getById:          (id)         => get(`/catalogo/${id}`),
-    create:           (data)       => post('/catalogo', data),
-    update:           (id, data)   => put(`/catalogo/${id}`, data),
-    delete:           (id)         => del(`/catalogo/${id}`),
-    porCategoria:     (catId)      => get(`/catalogo/categoria/${catId}`),
-    buscar:           (query)      => get(`/catalogo/buscar/${query}`),
+    getAll:       ()       => get('/catalogo'),
+    getById:      (id)     => get(`/catalogo/${id}`),
+    create:       (data)   => post('/catalogo', data),
+    update:       (id, d)  => put(`/catalogo/${id}`, d),
+    delete:       (id)     => del(`/catalogo/${id}`),
+    porCategoria: (catId)  => get(`/catalogo/categoria/${catId}`),
+    buscar:       (query)  => get(`/catalogo/buscar/${query}`),
   },
 
   // ========== TÉCNICOS ==========
   tecnicos: {
-    getAll:           ()           => get('/tecnicos'),
-    getById:          (id)         => get(`/tecnicos/${id}`),
-    create:           (data)       => post('/tecnicos', data),
-    update:           (id, data)   => put(`/tecnicos/${id}`, data),
-    delete:           (id)         => del(`/tecnicos/${id}`),
-    disponibles:      (fecha)      => get(`/tecnicos/disponibles/${fecha}`),
-    carga:            (fecha)      => get(`/tecnicos/carga/${fecha}`),
+    getAll:       ()        => get('/tecnicos'),
+    getById:      (id)      => get(`/tecnicos/${id}`),
+    create:       (data)    => post('/tecnicos', data),
+    update:       (id, d)   => put(`/tecnicos/${id}`, d),
+    delete:       (id)      => del(`/tecnicos/${id}`),
+    disponibles:  (fecha)   => get(`/tecnicos/disponibles/${fecha}`),
+    carga:        (fecha)   => get(`/tecnicos/carga/${fecha}`),
   },
 
-  // ========== INVENTARIO ==========
-  inventario: {
-    existencias:      ()           => get('/inventario/existencias'),
-    existenciasPorUbicacion: (ubId) => get(`/inventario/existencias/${ubId}`),
-    upsertExistencia: (data)       => post('/inventario/existencias', data),
-    movimientos:      ()           => get('/inventario/movimientos'),
-    crearMovimiento:  (data)       => post('/inventario/movimientos', data),
-    ubicaciones:      ()           => get('/inventario/ubicaciones'),
-    crearUbicacion:   (data)       => post('/inventario/ubicaciones', data),
-  },
-
-  // ========== HEREDADO (compatible) ==========
+  // ========== ALMACENAMIENTO (legacy) ==========
   almacenamiento: {
-    getAll:    ()           => get('/inventario/existencias'),
-    create:    (data)       => post('/inventario/existencias', data),
-    update:    (id, data)   => put(`/inventario/existencias/${id}`, data),
+    getAll: ()         => get('/almacenamiento'),
+    create: (data)     => post('/almacenamiento', data),
+    update: (id, data) => put(`/almacenamiento/${id}`, data),
+    delete: (id)       => del(`/almacenamiento/${id}`),
   },
 
+  // ========== MÉTRICAS (legacy) ==========
   metricas: {
-    getAll:    ()           => get('/metricas'),
-    create:    (data)       => post('/metricas', data),
-    update:    (id, data)   => put(`/metricas/${id}`, data),
+    getAll: ()         => get('/metricas'),
+    create: (data)     => post('/metricas', data),
+    update: (id, data) => put(`/metricas/${id}`, data),
   },
 
+  // ========== INVENTARIO (nuevo) ==========
+  inventario: {
+    existencias:            ()       => get('/inventario/existencias'),
+    existenciasPorUbicacion: (ubId)  => get(`/inventario/existencias/${ubId}`),
+    upsertExistencia:       (data)   => post('/inventario/existencias', data),
+    movimientos:            ()       => get('/inventario/movimientos'),
+    crearMovimiento:        (data)   => post('/inventario/movimientos', data),
+    ubicaciones:            ()       => get('/inventario/ubicaciones'),
+    crearUbicacion:         (data)   => post('/inventario/ubicaciones', data),
+  },
+
+  // ========== AI ==========
   ai: {
-    feedback:  (data)       => post('/ai/feedback', data),
+    feedback: (data) => post('/ai/feedback', data),
   },
 
+  // ========== CALENDARIO ==========
   calendar: {
-    sync:      (pedidoId)   => post(`/calendar/sync/${pedidoId}`),
+    sync: (pedidoId) => post(`/calendar/sync/${pedidoId}`),
   },
 };

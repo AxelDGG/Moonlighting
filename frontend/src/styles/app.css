@@ -17,6 +17,8 @@
     --err: #ef4444;
     --wa: #d97706;
     --sb: #0f172a;
+    /* animations */
+    --ease-out: cubic-bezier(.22,1,.36,1);
 }
 
 body {
@@ -1099,3 +1101,277 @@ code { font-family: 'Consolas', monospace; background: #f1f5f9; padding: 2px 5px
   }
   #sidebar-overlay.show { display: block; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   LUCIDE ICONS — base styles
+═══════════════════════════════════════════════════════════════ */
+.svg-ic svg, [data-lucide] svg, i[data-lucide] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    stroke-width: 2;
+}
+
+/* Nav icon sizing */
+.ni-item .ic { display: flex; align-items: center; justify-content: center; width: 22px; }
+.ni-item .ic svg { width: 17px; height: 17px; }
+
+/* Stat card icons */
+.sico svg { width: 22px; height: 22px; }
+
+/* ch heading icons */
+.ch h2 svg { width: 15px; height: 15px; vertical-align: middle; margin-right: 4px; margin-bottom: 1px; }
+
+/* Search input wrapper */
+.si-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+.si-wrap .si-ico {
+    position: absolute;
+    left: 10px;
+    color: var(--mu);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+}
+.si-wrap .si-ico svg { width: 14px; height: 14px; }
+.si-wrap .si { padding-left: 32px; width: 100%; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ENTRANCE ANIMATIONS
+═══════════════════════════════════════════════════════════════ */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(.93); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slideRight {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.tab.active { animation: fadeIn .2s ease; }
+
+.stats .sc {
+    animation: fadeUp .3s var(--ease-out) both;
+}
+.stats .sc:nth-child(1) { animation-delay: .04s; }
+.stats .sc:nth-child(2) { animation-delay: .08s; }
+.stats .sc:nth-child(3) { animation-delay: .12s; }
+.stats .sc:nth-child(4) { animation-delay: .16s; }
+
+.card { animation: fadeUp .25s var(--ease-out) both; }
+
+.modal { animation: scaleIn .22s var(--ease-out) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   STAT CARDS — gradientes + icons animados
+═══════════════════════════════════════════════════════════════ */
+.sc {
+    border-left: 3px solid transparent;
+    transition: transform .2s var(--ease-out), box-shadow .2s;
+    cursor: default;
+}
+.sc:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.09);
+}
+
+/* Color themes for stat cards */
+.sc-blue  { border-left-color: #3b82f6; }
+.sc-green { border-left-color: #22c55e; }
+.sc-purple{ border-left-color: #a855f7; }
+.sc-amber { border-left-color: #f59e0b; }
+
+.sc-blue  .sico { background: #dbeafe; color: #1d4ed8; }
+.sc-green .sico { background: #dcfce7; color: #15803d; }
+.sc-purple.sico, .sc-purple .sico { background: #f3e8ff; color: #7c3aed; }
+.sc-amber .sico { background: #fef3c7; color: #b45309; }
+
+/* Icon float animation on stat cards */
+@keyframes iconFloat {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-4px); }
+}
+.sc .sico svg {
+    animation: iconFloat 3s ease-in-out infinite;
+}
+.sc:nth-child(2) .sico svg { animation-delay: .4s; }
+.sc:nth-child(3) .sico svg { animation-delay: .8s; }
+.sc:nth-child(4) .sico svg { animation-delay: 1.2s; }
+
+/* ═══════════════════════════════════════════════════════════════
+   BUTTONS — hover animations
+═══════════════════════════════════════════════════════════════ */
+.btn {
+    transition: background .15s, box-shadow .15s, transform .12s;
+}
+.btn:hover  { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.97); }
+
+.btn.bp:hover { box-shadow: 0 4px 14px #2563eb40; }
+.btn.bd:hover { box-shadow: 0 4px 12px #ef444430; }
+
+/* Animated icon on action buttons */
+.btn svg { transition: transform .2s; }
+.btn:hover .svg-ic svg,
+.btn:hover [data-lucide] svg { transform: scale(1.15); }
+
+/* Special: delete button icon shakes on hover */
+.btn.bd:hover [data-lucide] svg,
+.btn.bd:hover svg {
+    animation: shake .35s ease;
+}
+@keyframes shake {
+    0%, 100% { transform: rotate(0); }
+    25%  { transform: rotate(-10deg); }
+    75%  { transform: rotate(10deg); }
+}
+
+/* Special: edit button icon rotates */
+.btn.bw:hover [data-lucide] svg,
+.btn.bw:hover svg { transform: rotate(-12deg) scale(1.1); }
+
+/* ═══════════════════════════════════════════════════════════════
+   NAV — active indicator glow
+═══════════════════════════════════════════════════════════════ */
+.ni-item {
+    transition: background .15s, color .15s, border-left-color .15s;
+}
+.ni-item.active .ic svg {
+    filter: drop-shadow(0 0 5px #60a5fa88);
+}
+/* Icon slide on hover */
+.ni-item:hover .ic svg { transform: translateX(2px); transition: transform .15s; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLE ROWS — hover effect mejorado
+═══════════════════════════════════════════════════════════════ */
+tr { transition: background .1s; }
+tr:hover td { background: #f8fafc; }
+
+/* Table row entrance: staggered */
+tbody tr {
+    animation: fadeUp .2s var(--ease-out) both;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN — mejorado
+═══════════════════════════════════════════════════════════════ */
+#login-screen {
+    background: radial-gradient(ellipse at 60% 40%, #1e3a8a22 0%, transparent 60%),
+                linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.lc-logo-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+    box-shadow: 0 8px 28px #2563eb55;
+    animation: iconFloat 3s ease-in-out infinite;
+}
+.lc-logo-icon svg { width: 30px; height: 30px; color: #fff; }
+
+.lc-logo-n { font-size: 26px; font-weight: 800; color: #f8fafc; letter-spacing: -.5px; }
+.lc-logo-s { font-size: 11px; color: #64748b; margin-top: 5px; text-transform: uppercase; letter-spacing: .1em; }
+
+.lc-box {
+    animation: scaleIn .35s var(--ease-out);
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(10px);
+}
+
+.lc-btn {
+    transition: background .15s, box-shadow .2s, transform .12s;
+}
+.lc-btn:hover { box-shadow: 0 6px 20px #2563eb45; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDEBAR — logo icon
+═══════════════════════════════════════════════════════════════ */
+.logo { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #1e293b; }
+
+.logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px #2563eb44;
+}
+.logo-icon svg { width: 18px; height: 18px; color: #fff; }
+
+.logo-text { display: flex; flex-direction: column; overflow: hidden; }
+.logo-n { font-size: 15px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logo-s { font-size: 9.5px; color: #475569; text-transform: uppercase; letter-spacing: .06em; margin-top: 1px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TOASTS — slide animation mejorada
+═══════════════════════════════════════════════════════════════ */
+.toast {
+    animation: toastIn .3s var(--ease-out);
+}
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(60px) scale(.92); }
+    to   { opacity: 1; transform: none; }
+}
+.toast svg { flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   PILLS — color scheme para tipo servicio
+═══════════════════════════════════════════════════════════════ */
+.pill-abanico    { background: #dbeafe; color: #1d4ed8; display: inline-flex; align-items: center; gap: 4px; }
+.pill-persiana   { background: #dcfce7; color: #15803d; display: inline-flex; align-items: center; gap: 4px; }
+.pill-limpieza   { background: #fef3c7; color: #b45309; display: inline-flex; align-items: center; gap: 4px; }
+.pill-levantamiento { background: #f3e8ff; color: #7c3aed; display: inline-flex; align-items: center; gap: 4px; }
+.pill-mantenimiento { background: #ffedd5; color: #c2410c; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CALENDAR CHIP ICONS
+═══════════════════════════════════════════════════════════════ */
+.day-ico svg { width: 20px; height: 20px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EMPTY STATE — más visual
+═══════════════════════════════════════════════════════════════ */
+.empty { animation: fadeIn .3s ease; }
+.ei { animation: iconFloat 3s ease-in-out infinite; display: inline-block; }
+.ei svg { opacity: .25; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LOADER — ring spinner mejorado
+═══════════════════════════════════════════════════════════════ */
+#loader { backdrop-filter: blur(4px); }
+
+/* ═══════════════════════════════════════════════════════════════
+   TOPBAR BADGE — pulse
+═══════════════════════════════════════════════════════════════ */
+.tb {
+    transition: background .2s;
+    animation: fadeIn .4s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TRACKING STEPS — icon styles
+═══════════════════════════════════════════════════════════════ */
+.track-dot svg { width: 14px; height: 14px; }
+

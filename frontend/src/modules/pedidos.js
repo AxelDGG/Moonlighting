@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
+import { refreshIcons } from '../icons.js';
 
 let cliMode = 'ex';
 let selectedModeloPrecio = 0;
@@ -399,12 +400,19 @@ export function renderPedidos() {
       <td data-label="Total" class="bold grn nw">${money(p.total)}</td>
       <td data-label="Estado">${sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
       <td class="nw">
-        <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">📍</button>
-        <button class="btn bw bsm" onclick="openPedidoModal(${p.id})">✏️</button>
-        <button class="btn bd bsm" onclick="deletePedido(${p.id})">🗑️</button>
+        <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">
+          <i data-lucide="map-pin" style="width:12px;height:12px"></i>
+        </button>
+        <button class="btn bw bsm" onclick="openPedidoModal(${p.id})" title="Editar">
+          <i data-lucide="pencil" style="width:12px;height:12px"></i>
+        </button>
+        <button class="btn bd bsm" onclick="deletePedido(${p.id})" title="Eliminar">
+          <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+        </button>
       </td></tr>`;
   }).join('');
   badge(state.pedidos.length + ' pedidos');
+  refreshIcons(tbody);
 }
 
 export function exportPedidos() {

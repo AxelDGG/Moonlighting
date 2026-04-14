@@ -4,6 +4,7 @@ import { esc, muniColor, pillPago, todayStr, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
+import { refreshIcons } from '../icons.js';
 
 async function geocode(address) {
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`, { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } });
@@ -62,7 +63,7 @@ export function editPago(id) {
   const span = document.getElementById('pago-' + id);
   const c = state.clientes.find(x => x.id === id); if (!c) return;
   span.innerHTML = `<select onchange="savePago(${id},this.value)" onblur="renderClientes()" style="padding:4px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;outline:none">
-    ${Object.keys(PAGO_IC).map(m => `<option value="${m}" ${c.metodoPago === m ? 'selected' : ''}>${PAGO_IC[m]} ${m}</option>`).join('')}
+    ${Object.keys(PAGO_IC).map(m => `<option value="${m}" ${c.metodoPago === m ? 'selected' : ''}>${m}</option>`).join('')}
   </select>`;
   span.querySelector('select').focus();
 }
@@ -84,24 +85,29 @@ export function renderClientes() {
   const q = (document.getElementById('qc')?.value || '').toLowerCase();
   const tbody = document.getElementById('tbc'), empty = document.getElementById('ec');
   const list = state.clientes.filter(c => c.nombre.toLowerCase().includes(q) || String(c.id).includes(q) || c.numero.toLowerCase().includes(q) || c.direccion.toLowerCase().includes(q) || (c.municipio || '').toLowerCase().includes(q));
-  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; refreshIcons(empty); return; }
   empty.style.display = 'none';
   tbody.innerHTML = list.map(c => {
     const col = muniColor(c.municipio);
     return `<tr>
       <td data-label="ID"><span class="pill pi">#${c.id}</span></td>
       <td data-label="Nombre" class="bold">${esc(c.nombre)}</td>
-      <td data-label="Teléfono" class="nw">${esc(c.numero)}</td>
-      <td data-label="Dirección"><span class="ell" title="${esc(c.direccion)}">${esc(c.direccion)}</span></td>
+      <td data-label="Teléfono" class="nw">${esc(c.numero || c.telefono || '—')}</td>
+      <td data-label="Dirección"><span class="ell" title="${esc(c.direccion)}">${esc(c.direccion || '—')}</span></td>
       <td data-label="Municipio" class="nw"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span><span style="font-size:12px">${esc(c.municipio || '—')}</span></span></td>
       <td data-label="Pago" id="pago-${c.id}" onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar">${pillPago(c.metodoPago)}</td>
       <td data-label="Pedido">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
       <td class="nw">
-        <button class="btn bw bsm" onclick="openClienteModal(${c.id})">✏️</button>
-        <button class="btn bd bsm" onclick="deleteCliente(${c.id})">🗑️</button>
+        <button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar">
+          <i data-lucide="pencil" style="width:12px;height:12px"></i>
+        </button>
+        <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar">
+          <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+        </button>
       </td></tr>`;
   }).join('');
   badge(state.clientes.length + ' clientes');
+  refreshIcons(tbody);
 }
 
 export function exportClientes() {

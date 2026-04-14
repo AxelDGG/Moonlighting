@@ -25,16 +25,17 @@ export function calcDuracionMin(inicio, fin) {
 }
 
 export function muniColor(m) { return (MUNIS[m] || {}).color || '#94a3b8'; }
-export function pillPago(p) { const cl = PAGO_CLS[p] || 'pi', ic = PAGO_IC[p] || ''; return `<span class="pill ${cl}">${ic} ${esc(p)}</span>`; }
-export function tipoPill(t) { const bg = TIPO_BG[t] || '#f1f5f9', co = TIPO_CO[t] || '#475569', ic = TIPO_IC[t] || '📦'; return `<span class="pill" style="background:${bg};color:${co}">${ic} ${t}</span>`; }
+export function pillPago(p) { const cl = PAGO_CLS[p] || 'pi', n = PAGO_IC[p] || 'circle'; return `<span class="pill ${cl}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${esc(p)}</span>`; }
+export function tipoPill(t) { const bg = TIPO_BG[t] || '#f1f5f9', co = TIPO_CO[t] || '#475569', n = TIPO_IC[t] || 'package'; return `<span class="pill" style="background:${bg};color:${co}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${t}</span>`; }
 export function statusPill(estado) {
   const col = STATUS_COLORS[estado] || '#94a3b8', bg = STATUS_BG[estado] || '#f1f5f9', label = STATUS_LABELS[estado] || estado;
-  const icons = { programado: '🕐', en_curso: '🔄', completado: '✅', cancelado: '❌', atrasado: '⚠️' };
-  return `<span class="pill" style="background:${bg};color:${col}">${icons[estado] || '•'} ${label}</span>`;
+  const icons = { programado: 'clock', en_curso: 'play-circle', completado: 'check-circle', cancelado: 'x-circle', atrasado: 'alert-triangle' };
+  const n = icons[estado] || 'circle';
+  return `<span class="pill" style="background:${bg};color:${col}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${label}</span>`;
 }
 export function pedidoDetalle(p) {
   const d = p.detalles || {};
-  if (p.tipoServicio === 'Abanico') { let h = `<span class="bold">${esc(d.modelo || '')}</span>`; if (d.nDesins > 0) h += ` <span class="pill" style="background:#fef3c7;color:#92400e;font-size:10px">⬇ ×${d.nDesins}</span>`; return h; }
+  if (p.tipoServicio === 'Abanico') { let h = `<span class="bold">${esc(d.modelo || '')}</span>`; if (d.nDesins > 0) h += ` <span class="pill" style="background:#fef3c7;color:#92400e;font-size:10px"><i data-lucide="arrow-down" style="width:10px;height:10px;vertical-align:middle"></i> ×${d.nDesins}</span>`; return h; }
   if (p.tipoServicio === 'Persiana') return `<span class="bold">${esc(d.tipoTela || '')}</span> <span class="mu">${d.ancho}×${d.alto}cm · ${d.instalacion}</span>`;
   if (p.tipoServicio === 'Limpieza') return `<span class="bold">${esc(d.modelo || '')}</span>${d.notas ? ` <span class="mu">${esc(d.notas)}</span>` : ''}`;
   return `<span class="mu">${esc(d.notas || '—')}</span>`;

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc, muniColor, pillPago, tipoPill, statusPill, pedidoDetalle, money, todayStr } from '../utils.js';
 import { toast } from '../ui.js';
 import { MUNIS, TIPO_IC, TIPO_BG, TIPO_CO } from '../constants.js';
+import { refreshIcons } from '../icons.js';
 
 let map = null;
 let mapMarkers = [];
@@ -21,6 +22,7 @@ export function initMap() {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19
   }).addTo(map);
+  map.on('popupopen', e => { try { if (e.popup._contentNode) refreshIcons(e.popup._contentNode); } catch (_) {} });
   updateMapMarkers();
 }
 
@@ -143,7 +145,8 @@ export async function updateMapMarkers() {
     const pedHtml = pedCli.length
       ? pedCli.map(p => {
           const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-          return `<div style="margin-top:3px;font-size:11px;color:#475569">${TIPO_IC[p.tipoServicio] || '📦'} ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
+          const iconName = TIPO_IC[p.tipoServicio] || 'package';
+          return `<div style="margin-top:3px;font-size:11px;color:#475569;display:flex;align-items:center;gap:4px"><i data-lucide="${iconName}" style="width:11px;height:11px;flex-shrink:0"></i> ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
         }).join('')
       : '<div style="font-size:11px;color:#94a3b8;margin-top:3px">Sin pedidos</div>';
 
@@ -156,8 +159,8 @@ export async function updateMapMarkers() {
           <span style="font-size:11px;color:#64748b">${esc(muni)}</span>
         </div>
         ${statusLabel}
-        📞 ${esc(client.numero)}<br/>
-        📍 <span style="font-size:11.5px">${esc(client.direccion)}</span><br/>
+        <span style="display:flex;align-items:center;gap:4px"><i data-lucide="phone" style="width:11px;height:11px"></i> ${esc(client.numero)}</span>
+        <span style="display:flex;align-items:center;gap:4px"><i data-lucide="map-pin" style="width:11px;height:11px"></i> <span style="font-size:11.5px">${esc(client.direccion)}</span></span>
         ${pillPago(client.metodoPago)}<br/>
         ${pedHtml}
       </div>`,
@@ -225,10 +228,11 @@ function initMapFilter() {
   _mapFilterReady = true;
   const filterBody = document.getElementById('mf-chips');
   if (filterBody) {
-    filterBody.innerHTML = Object.entries(TIPO_IC).map(([t, ic]) => {
+    filterBody.innerHTML = Object.entries(TIPO_IC).map(([t, iconName]) => {
       const bg = TIPO_BG[t] || '#f1f5f9', co = TIPO_CO[t] || '#475569';
-      return `<span class="mf-chip on" data-tipo="${t}" style="background:${bg};color:${co}" onclick="toggleMapTipo('${t}')">${ic} ${t}</span>`;
+      return `<span class="mf-chip on" data-tipo="${t}" style="background:${bg};color:${co}" onclick="toggleMapTipo('${t}')"><i data-lucide="${iconName}" style="width:11px;height:11px;vertical-align:middle"></i> ${t}</span>`;
     }).join('');
+    refreshIcons(filterBody);
   }
   updateMapCount();
   document.addEventListener('click', e => {

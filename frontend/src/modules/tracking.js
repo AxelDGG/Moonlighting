@@ -4,6 +4,7 @@ import { esc, fdate, tipoPill, statusPill, calcRetrasoMin, calcDuracionMin, mone
 import { toast, openOv, closeOv } from '../ui.js';
 import { renderPedidos } from './pedidos.js';
 import { STATUS_COLORS } from '../constants.js';
+import { refreshIcons } from '../icons.js';
 
 export async function openTrackModal(pedidoId) {
   const p = state.pedidos.find(x => x.id === pedidoId); if (!p) return;
@@ -36,21 +37,21 @@ export function renderTrackBody(sm, p, c) {
     <div style="flex:1">
       <div style="font-size:13px;font-weight:600">${c ? esc(c.nombre) : 'Sin cliente'}</div>
       <div style="font-size:11.5px;color:var(--mu)">${tipoPill(p.tipoServicio)} · ${fdate(p.fecha)} · ${esc(sm.zona || 'Sin zona')}</div>
-      ${sm.tecnico ? `<div style="font-size:11.5px;color:var(--mu);margin-top:2px">👷 ${esc(sm.tecnico)}${sm.orden_ruta ? ` · Ruta #${sm.orden_ruta}` : ''}</div>` : ''}
+      ${sm.tecnico ? `<div style="font-size:11.5px;color:var(--mu);margin-top:2px;display:flex;align-items:center;gap:4px"><i data-lucide="hard-hat" style="width:11px;height:11px"></i> ${esc(sm.tecnico)}${sm.orden_ruta ? ` · Ruta #${sm.orden_ruta}` : ''}</div>` : ''}
     </div>
     ${statusPill(estado)}
   </div>`;
   if (retraso !== null) {
     const isLate = retraso > 0;
     html += `<div style="padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;background:${isLate ? '#fee2e2' : '#dcfce7'};color:${isLate ? '#dc2626' : '#15803d'}">
-      ${isLate ? '⚠️' : '✅'} ${isLate ? `Retraso de ${retraso} minutos` : `Llegada puntual (${Math.abs(retraso)} min antes)`}
+      <i data-lucide="${isLate ? 'alert-triangle' : 'check-circle'}" style="width:14px;height:14px;flex-shrink:0"></i> ${isLate ? `Retraso de ${retraso} minutos` : `Llegada puntual (${Math.abs(retraso)} min antes)`}
     </div>`;
   }
   const steps = [
-    { key: 'programada', icon: '📋', label: 'Hora programada',    time: sm.hora_programada, done: !!sm.hora_programada },
-    { key: 'llegada',    icon: '🚗', label: 'Llegada real',        time: sm.hora_llegada,    done: !!sm.hora_llegada },
-    { key: 'inicio',     icon: '🔧', label: 'Inicio del servicio', time: sm.hora_inicio,     done: !!sm.hora_inicio },
-    { key: 'fin',        icon: '✅', label: 'Fin del servicio',    time: sm.hora_fin,        done: !!sm.hora_fin },
+    { key: 'programada', icon: 'clipboard',    label: 'Hora programada',    time: sm.hora_programada, done: !!sm.hora_programada },
+    { key: 'llegada',    icon: 'car',           label: 'Llegada real',        time: sm.hora_llegada,    done: !!sm.hora_llegada },
+    { key: 'inicio',     icon: 'wrench',        label: 'Inicio del servicio', time: sm.hora_inicio,     done: !!sm.hora_inicio },
+    { key: 'fin',        icon: 'check-circle',  label: 'Fin del servicio',    time: sm.hora_fin,        done: !!sm.hora_fin },
   ];
   let activeFound = false;
   html += '<div class="track-timeline">';
@@ -60,16 +61,16 @@ export function renderTrackBody(sm, p, c) {
     if (!isDone && !activeFound) { dotClass = 'active'; activeFound = true; }
     else if (!isDone) { dotClass = 'pending'; }
     html += `<div class="track-step">
-      <div class="track-dot ${dotClass}">${isDone ? '✓' : step.icon}</div>
+      <div class="track-dot ${dotClass}"><i data-lucide="${isDone ? 'check' : step.icon}" style="width:12px;height:12px"></i></div>
       <div class="track-info">
         <h4>${step.label}</h4>
         ${isDone ? `<div class="track-time">${step.time}</div>` : '<p>Pendiente</p>'}
-        ${!isDone && dotClass === 'active' ? `<div class="track-actions"><button class="btn bp bsm" onclick="trackAction(${sm.id},'${step.key}')">⏱️ Registrar ahora</button></div>` : ''}
+        ${!isDone && dotClass === 'active' ? `<div class="track-actions"><button class="btn bp bsm" onclick="trackAction(${sm.id},'${step.key}')"><i data-lucide="timer" style="width:11px;height:11px"></i> Registrar ahora</button></div>` : ''}
       </div>
     </div>`;
   });
   html += '</div>';
-  if (duracion !== null) html += `<div style="padding:10px 14px;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:12.5px;font-weight:600;margin-top:4px">⏱️ Duración total: ${duracion} minutos</div>`;
+  if (duracion !== null) html += `<div style="padding:10px 14px;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:12.5px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:6px"><i data-lucide="timer" style="width:14px;height:14px"></i> Duración total: ${duracion} minutos</div>`;
   if (estado === 'atrasado' || (retraso && retraso > 0)) {
     html += `<div style="margin-top:14px"><div style="font-size:10.5px;font-weight:600;color:var(--mu);text-transform:uppercase;margin-bottom:4px">Motivo del retraso</div>
       <select onchange="saveMotivo(${sm.id},'retraso',this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--bo);border-radius:7px;font-size:13px">
@@ -79,10 +80,11 @@ export function renderTrackBody(sm, p, c) {
   }
   if (estado !== 'completado' && estado !== 'cancelado') {
     html += `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bo);display:flex;gap:8px">
-      <button class="btn bd bsm" onclick="cancelService(${sm.id})">❌ Cancelar servicio</button>
+      <button class="btn bd bsm" onclick="cancelService(${sm.id})"><i data-lucide="x-circle" style="width:12px;height:12px"></i> Cancelar servicio</button>
     </div>`;
   }
   body.innerHTML = html;
+  refreshIcons(body);
 }
 
 export async function trackAction(smId, key) {

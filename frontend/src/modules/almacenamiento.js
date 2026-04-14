@@ -2,6 +2,19 @@ import { state, aFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort } from '../utils.js';
 import { toast, openOv, closeOv } from '../ui.js';
+import { refreshIcons } from '../icons.js';
+
+const catPillHtml = {
+  abanico:  `<span class="pill pill-abanico"><i data-lucide="wind" style="width:11px;height:11px"></i> Abanico</span>`,
+  persiana: `<span class="pill pill-persiana"><i data-lucide="layout-template" style="width:11px;height:11px"></i> Persiana</span>`,
+};
+
+const lugarIcoHtml = {
+  'Bodega':          `<i data-lucide="warehouse" style="width:13px;height:13px;color:#64748b"></i>`,
+  'Casa':            `<i data-lucide="home"      style="width:13px;height:13px;color:#64748b"></i>`,
+  'Camioneta Nueva': `<i data-lucide="truck"     style="width:13px;height:13px;color:#64748b"></i>`,
+  'Camioneta Vieja': `<i data-lucide="truck"     style="width:13px;height:13px;color:#94a3b8"></i>`,
+};
 
 export function renderAlmacenamiento() {
   const q      = (document.getElementById('qa')?.value || '').toLowerCase();
@@ -16,17 +29,14 @@ export function renderAlmacenamiento() {
     return matchQ && matchCat;
   });
 
-  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; refreshIcons(empty); return; }
   empty.style.display = 'none';
 
-  // Group totals per model for the summary row
   tbody.innerHTML = list
     .sort((a, b) => a.modelo.localeCompare(b.modelo) || a.lugar.localeCompare(b.lugar))
     .map(a => {
-      const catPill = a.categoria === 'abanico'
-        ? '<span class="pill" style="background:#dbeafe;color:#1e40af">🪭 Abanico</span>'
-        : '<span class="pill" style="background:#dcfce7;color:#166534">🪟 Persiana</span>';
-      const lugarIc = { Bodega: '🏭', Casa: '🏠', 'Camioneta Nueva': '🚚', 'Camioneta Vieja': '🚛' };
+      const catPill = catPillHtml[a.categoria] || `<span class="pill">${esc(a.categoria)}</span>`;
+      const lugarIc = lugarIcoHtml[a.lugar] || '';
       const stockCl = a.cantidad > 3 ? 'color:#15803d;font-weight:700' : a.cantidad > 0 ? 'color:#92400e;font-weight:700' : 'color:#ef4444;font-weight:700';
       const unidad  = a.categoria === 'persiana' ? '/m²' : '/ud';
       const dateStr = a.updatedAt ? fdateShort(a.updatedAt.substring(0, 10)) : '—';
@@ -34,17 +44,23 @@ export function renderAlmacenamiento() {
         <td><span class="pill pi">#${a.id}</span></td>
         <td><span class="bold">${esc(a.modelo)}</span></td>
         <td>${catPill}</td>
-        <td>${lugarIc[a.lugar] || ''} ${esc(a.lugar)}</td>
+        <td style="display:flex;align-items:center;gap:5px">${lugarIc} ${esc(a.lugar)}</td>
         <td class="tr" style="${stockCl}">${a.cantidad}</td>
         <td class="nw">${money(a.precio)}<span style="font-size:10px;color:var(--mu)">${unidad}</span></td>
         <td style="font-size:11px;color:var(--mu);max-width:180px">${a.notas ? esc(a.notas) : '<span class="mu">—</span>'}</td>
         <td style="font-size:11px;color:var(--mu)" class="nw">${dateStr}</td>
         <td class="nw">
-          <button class="btn bw bsm" onclick="openAlmacenModal(${a.id})">✏️</button>
-          <button class="btn bd bsm" onclick="deleteAlmacen(${a.id})">🗑️</button>
+          <button class="btn bw bsm" onclick="openAlmacenModal(${a.id})" title="Editar">
+            <i data-lucide="pencil" style="width:12px;height:12px"></i>
+          </button>
+          <button class="btn bd bsm" onclick="deleteAlmacen(${a.id})" title="Eliminar">
+            <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+          </button>
         </td>
       </tr>`;
     }).join('');
+
+  refreshIcons(tbody);
 }
 
 export function openAlmacenModal(id = null) {
@@ -59,7 +75,7 @@ export function openAlmacenModal(id = null) {
     document.getElementById('a-lugar').value  = a.lugar;
     document.getElementById('a-qty').value    = a.cantidad;
     document.getElementById('a-precio').value = a.precio;
-    document.getElementById('a-notas').value  = a.notas;
+    document.getElementById('a-notas').value  = a.notas || '';
   }
   openOv('ov-almacen');
 }

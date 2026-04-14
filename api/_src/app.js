@@ -11,6 +11,7 @@ import metricasRoutes        from './routes/metricas.js';
 import aiRoutes              from './routes/ai.js';
 import calendarRoutes        from './routes/calendar.js';
 import inventarioRoutes      from './routes/inventario.js';
+import almacenamientoRoutes  from './routes/almacenamiento.js';
 import serviciosRoutes       from './routes/servicios.js';
 import pagosRoutes           from './routes/pagos.js';
 import catalogoRoutes        from './routes/catalogo.js';
@@ -47,7 +48,8 @@ export async function createApp() {
   await app.register(metricasRoutes,       { prefix: '/api/metricas' });
   await app.register(aiRoutes,             { prefix: '/api/ai' });
   await app.register(calendarRoutes,       { prefix: '/api/calendar' });
-  await app.register(inventarioRoutes,     { prefix: '/api/inventario' });
+  await app.register(inventarioRoutes,        { prefix: '/api/inventario' });
+  await app.register(almacenamientoRoutes,    { prefix: '/api/almacenamiento' });
 
   // Sanitized error handler — never leak internals
   app.setErrorHandler((error, request, reply) => {

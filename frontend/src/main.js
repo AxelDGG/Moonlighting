@@ -87,7 +87,7 @@ async function syncOutlook(pedidoId) {
     await api.calendar.sync(pedidoId);
     await loadAll();
     renderCal();
-    toast('Sincronizado con Outlook ✓', 'ok');
+    toast('Sincronizado con Outlook', 'ok');
   } catch (err) {
     toast('Error al sincronizar con Outlook: ' + err.message, 'er');
   } finally {
@@ -221,5 +221,6 @@ window.deleteAlmacen        = deleteAlmacen;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();
+  if (window.lucide) try { window.lucide.createIcons(); } catch (_) {}
   init();
 });
