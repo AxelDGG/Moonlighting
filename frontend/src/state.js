@@ -250,6 +250,34 @@ export function servFromDb(r) {
   };
 }
 
+// ============= ALMACENAMIENTO (legacy) =============
+export function aFromDb(r) {
+  return {
+    id: r.id,
+    modelo: r.modelo,
+    categoria: r.categoria,
+    lugar: r.lugar,
+    cantidad: r.cantidad,
+    precio: r.precio,
+    notas: r.notas,
+    updatedAt: r.updated_at || r.updatedAt,
+  };
+}
+
+// ============= SERVICIOS METRICAS (legacy) =============
+export function smFromDb(r) {
+  return {
+    id: r.id,
+    pedido_id: r.pedido_id,
+    tecnico: r.tecnico,
+    hora_programada: r.hora_programada,
+    zona: r.zona,
+    orden_ruta: r.orden_ruta,
+    estado: r.estado,
+    dia_semana: r.dia_semana,
+  };
+}
+
 // ============= INVENTARIO =============
 export function invExistFromDb(r) {
   return {
