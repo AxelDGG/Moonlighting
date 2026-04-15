@@ -10,7 +10,7 @@ import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedid
          onTelaInput, onTelaKey, onTelaBlur, selectTela } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
-import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter } from './modules/mapa.js';
+import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen } from './modules/almacenamiento.js';
 
@@ -78,6 +78,10 @@ async function loadAll() {
     const almacenamiento = await api.almacenamiento.getAll();
     state.almacenamiento = almacenamiento.map(aFromDb);
   } catch { /* tabla almacenamiento puede no existir */ }
+
+  try {
+    state.tecnicos = await api.tecnicos.getAll();
+  } catch { /* tabla tecnicos puede no existir */ }
 }
 
 /* ── OUTLOOK SYNC ── */
@@ -205,6 +209,7 @@ window.onMfKey         = onMfKey;
 window.selectAcItem    = selectAcItem;
 window.toggleMapTipo   = toggleMapTipo;
 window.resetMapFilter  = resetMapFilter;
+window.onMfSelect      = onMfSelect;
 
 // Modals
 window.openOv  = openOv;

@@ -212,6 +212,17 @@ export function openPedidoModal(id = null) {
     o.textContent = `${c.nombre} (#${c.id})`;
     sel.appendChild(o);
   });
+  // Populate technicians from DB (with fallback to constants)
+  const tecSel = document.getElementById('p-tecnico');
+  tecSel.innerHTML = '<option value="">— Ninguno —</option>';
+  const tecList = state.tecnicos && state.tecnicos.length ? state.tecnicos : [];
+  tecList.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.nombre;
+    opt.textContent = t.nombre;
+    tecSel.appendChild(opt);
+  });
+
   if (!id) { document.getElementById('p-tipo').value = 'Abanico'; updatePF(); }
   if (id !== null) {
     const p = state.pedidos.find(x => x.id === id); if (!p) return;

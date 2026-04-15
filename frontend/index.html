@@ -243,6 +243,23 @@
             <input id="mf-dir" type="text" placeholder="Buscar dirección…" oninput="onMfInput('dir')" onfocus="onMfFocus('dir')" onblur="onMfBlur('dir')" onkeydown="onMfKey(event,'dir')" autocomplete="off"/>
             <div class="mf-ac" id="mf-ac-dir"></div>
           </div>
+          <div class="mf-field">
+            <label><i data-lucide="circle-dot" style="width:12px;height:12px"></i> Estado</label>
+            <select id="mf-estado" onchange="onMfSelect('estado')">
+              <option value="">Todos</option>
+              <option value="programado">Programado</option>
+              <option value="en_curso">En curso</option>
+              <option value="completado">Completado</option>
+              <option value="atrasado">Atrasado</option>
+              <option value="none">Sin seguimiento</option>
+            </select>
+          </div>
+          <div class="mf-field">
+            <label><i data-lucide="map" style="width:12px;height:12px"></i> Zona</label>
+            <select id="mf-zona" onchange="onMfSelect('zona')">
+              <option value="">Todas</option>
+            </select>
+          </div>
           <div class="mf-bar-section"><div class="mf-chips-bar" id="mf-chips"></div></div>
           <div class="mf-bar-section">
             <span class="mf-bar-count" id="mf-count">—</span>
@@ -430,9 +447,6 @@
           <div class="fi"><label>Técnico</label>
             <select id="p-tecnico">
               <option value="">— Ninguno —</option>
-              <option value="Carlos R.">Carlos R.</option>
-              <option value="Miguel A.">Miguel A.</option>
-              <option value="José L.">José L.</option>
             </select>
           </div>
           <div class="fi"><label>Ruta #</label><input id="p-orden-ruta" type="number" min="1"/></div>

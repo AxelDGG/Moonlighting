@@ -11,7 +11,7 @@ let muniZones = [];
 let activeLayers = {};
 
 let _mapFilterReady = false;
-let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set() };
+let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set(), estado: '', zona: '' };
 let _mfFocused = { nombre: -1, tel: -1, dir: -1 };
 
 export function initMap() {
@@ -234,6 +234,16 @@ function initMapFilter() {
     }).join('');
     refreshIcons(filterBody);
   }
+  // Populate zona select with MUNIS
+  const zonaSelect = document.getElementById('mf-zona');
+  if (zonaSelect && zonaSelect.options.length <= 1) {
+    Object.keys(MUNIS).forEach(muni => {
+      const opt = document.createElement('option');
+      opt.value = muni;
+      opt.textContent = muni;
+      zonaSelect.appendChild(opt);
+    });
+  }
   updateMapCount();
   document.addEventListener('click', e => {
     if (!e.target.closest('.mf-field')) {
@@ -342,9 +352,14 @@ function clientPassFilter(c) {
   if (mapFilter.nombre && !c.nombre.toLowerCase().includes(mapFilter.nombre)) return false;
   if (mapFilter.tel && !(c.numero || '').toLowerCase().includes(mapFilter.tel)) return false;
   if (mapFilter.dir && !(c.direccion || '').toLowerCase().includes(mapFilter.dir) && !(c.municipio || '').toLowerCase().includes(mapFilter.dir)) return false;
+  if (mapFilter.zona && (c.municipio || '') !== mapFilter.zona) return false;
   if (mapFilter.tipos.size > 0) {
     const cp = state.pedidos.filter(p => +p.clienteId === c.id);
     if (!cp.some(p => mapFilter.tipos.has(p.tipoServicio))) return false;
+  }
+  if (mapFilter.estado) {
+    const serviceStatus = getClientServiceStatus(c.id);
+    if (serviceStatus !== mapFilter.estado) return false;
   }
   return true;
 }
@@ -359,13 +374,25 @@ export function toggleMapTipo(tipo) {
   applyMapFilter();
 }
 
+export function onMfSelect(field) {
+  const id = field === 'estado' ? 'mf-estado' : 'mf-zona';
+  mapFilter[field] = document.getElementById(id)?.value || '';
+  applyMapFilter();
+}
+
 export function resetMapFilter() {
   document.getElementById('mf-nombre').value = '';
   document.getElementById('mf-tel').value = '';
   document.getElementById('mf-dir').value = '';
+  const estadoEl = document.getElementById('mf-estado');
+  const zonaEl   = document.getElementById('mf-zona');
+  if (estadoEl) estadoEl.value = '';
+  if (zonaEl)   zonaEl.value   = '';
   mapFilter.nombre = '';
   mapFilter.tel = '';
   mapFilter.dir = '';
+  mapFilter.estado = '';
+  mapFilter.zona = '';
   mapFilter.tipos.clear();
   document.querySelectorAll('.mf-ac').forEach(d => d.classList.remove('open'));
   document.querySelectorAll('.mf-chip[data-tipo]').forEach(c => c.classList.add('on'));
@@ -373,7 +400,7 @@ export function resetMapFilter() {
 }
 
 function updateMapFilterUI() {
-  const active = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0;
+  const active = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona;
   document.getElementById('mf-reset')?.classList.toggle('show', active);
 }
 
@@ -382,7 +409,7 @@ function updateMapCount() {
   if (!el) return;
   const total = state.clientes.filter(c => c.lat && c.lng).length;
   const shown = mapMarkers.length;
-  const isFiltered = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0;
+  const isFiltered = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona;
   el.innerHTML = isFiltered
     ? `<b>${shown}</b> de ${total} clientes`
     : `<b>${total}</b> cliente${total !== 1 ? 's' : ''}`;
