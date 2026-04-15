@@ -5,8 +5,9 @@ import { toast, openOv, closeOv } from '../ui.js';
 import { refreshIcons } from '../icons.js';
 
 const catPillHtml = {
-  abanico:  `<span class="pill pill-abanico"><i data-lucide="wind" style="width:11px;height:11px"></i> Abanico</span>`,
-  persiana: `<span class="pill pill-persiana"><i data-lucide="layout-template" style="width:11px;height:11px"></i> Persiana</span>`,
+  abanico:     `<span class="pill pill-abanico"><i data-lucide="wind" style="width:11px;height:11px"></i> Abanico</span>`,
+  persiana:    `<span class="pill pill-persiana"><i data-lucide="layout-template" style="width:11px;height:11px"></i> Tela/Persiana</span>`,
+  refacciones: `<span class="pill pill-refacc"><i data-lucide="wrench" style="width:11px;height:11px"></i> Refacciones</span>`,
 };
 
 const lugarIcoHtml = {

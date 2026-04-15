@@ -1341,6 +1341,7 @@ tbody tr {
 ═══════════════════════════════════════════════════════════════ */
 .pill-abanico    { background: #dbeafe; color: #1d4ed8; display: inline-flex; align-items: center; gap: 4px; }
 .pill-persiana   { background: #dcfce7; color: #15803d; display: inline-flex; align-items: center; gap: 4px; }
+.pill-refacc     { background: #fef9c3; color: #854d0e; display: inline-flex; align-items: center; gap: 4px; }
 .pill-limpieza   { background: #fef3c7; color: #b45309; display: inline-flex; align-items: center; gap: 4px; }
 .pill-levantamiento { background: #f3e8ff; color: #7c3aed; display: inline-flex; align-items: center; gap: 4px; }
 .pill-mantenimiento { background: #ffedd5; color: #c2410c; display: inline-flex; align-items: center; gap: 4px; }
