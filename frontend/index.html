@@ -278,6 +278,31 @@
             <div class="sl-item"><div class="sl-dot" style="background:#94a3b8"></div>Sin seguimiento</div>
           </div>
         </div>
+
+        <!-- GENERAR RUTA -->
+        <div class="card" style="margin-top:16px">
+          <div class="ch" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <h2 style="display:flex;align-items:center;gap:6px">
+              <i data-lucide="navigation" style="width:15px;height:15px"></i> Generar Ruta
+            </h2>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="route-day" onchange="onRouteDayChange()" style="padding:6px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;font-family:inherit;background:var(--card);color:var(--text)">
+                <option value="today">Hoy</option>
+                <option value="tomorrow">Mañana</option>
+                <option value="custom">Otro día…</option>
+              </select>
+              <span id="route-date-wrap" style="display:none">
+                <input id="route-date-input" type="date" style="padding:6px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;font-family:inherit;background:var(--card);color:var(--text)"/>
+              </span>
+              <button class="btn bp bsm" onclick="generateDayRoute()">
+                <i data-lucide="route" style="width:13px;height:13px"></i> Generar ruta
+              </button>
+            </div>
+          </div>
+          <div class="cb" id="route-body">
+            <div style="color:var(--mu);font-size:12px;text-align:center;padding:8px">Selecciona un día y presiona <b>Generar ruta</b>.</div>
+          </div>
+        </div>
       </section>
 
       <!-- MÉTRICAS -->
@@ -431,6 +456,7 @@
 
           <!-- COMUNES -->
           <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required oninput="calcPedidoTotal()"/></div>
+          <div class="fi"><label>Traslado ($)</label><input id="p-traslado" type="number" min="0" step="1" value="200" oninput="calcPedidoTotal()" title="Costo fijo de traslado — se suma al total automáticamente"/></div>
           <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required/></div>
           <div class="fi full"><label>Pago</label>
             <select id="p-pago">
@@ -444,7 +470,13 @@
           <!-- TRACKING -->
           <div class="fi full fdiv">Tracking</div>
           <div class="fi"><label>Hora Prog.</label><input id="p-hora-prog" type="time"/></div>
-          <div class="fi"><label>Técnico</label>
+          <div class="fi">
+            <label style="display:flex;justify-content:space-between;align-items:center">
+              Técnico
+              <button type="button" class="btn bg bsm" onclick="openTecnicosManager()" title="Gestionar técnicos" style="font-size:10px;padding:2px 7px">
+                <i data-lucide="settings" style="width:11px;height:11px"></i>
+              </button>
+            </label>
             <select id="p-tecnico">
               <option value="">— Ninguno —</option>
             </select>
@@ -499,6 +531,62 @@
         <div class="fa">
           <button type="button" class="btn bg" onclick="closeOv('ov-almacen')">Cancelar</button>
           <button type="submit" class="btn bp" id="btn-sa">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Gestionar Técnicos -->
+<div class="ov" id="ov-tecnicos">
+  <div class="modal" style="width:660px">
+    <div class="mh">
+      <h3>Técnicos</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn bp bsm" onclick="openTecnicoModal()"><i data-lucide="plus" style="width:13px;height:13px"></i> Nuevo técnico</button>
+        <button class="mc" onclick="closeOv('ov-tecnicos')"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      </div>
+    </div>
+    <div class="mb">
+      <div class="tw">
+        <table>
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Tipo</th><th>Comisiones</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tb-tec"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Nuevo / Editar Técnico -->
+<div class="ov" id="ov-tecnico">
+  <div class="modal" style="width:480px">
+    <div class="mh"><h3 id="mt-title">Nuevo Técnico</h3><button class="mc" onclick="closeOv('ov-tecnico')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mb">
+      <form id="ft" onsubmit="submitTecnico(event)">
+        <input type="hidden" id="t-eid"/>
+        <div class="fg">
+          <div class="fi full"><label>Nombre *</label><input id="t-nombre" type="text" required placeholder="Ej: Carlos R."/></div>
+          <div class="fi"><label>Teléfono</label><input id="t-tel" type="tel" placeholder="+52 81 …"/></div>
+          <div class="fi"><label>Tipo de colaborador</label>
+            <select id="t-tipo">
+              <option value="">— Sin especificar —</option>
+              <option value="interno">Interno</option>
+              <option value="externo">Externo</option>
+              <option value="especialista">Especialista</option>
+            </select>
+          </div>
+          <div class="fi"><label>Comisión instalación (%)</label><input id="t-pct-inst" type="number" min="0" max="100" step="0.5" placeholder="0–100"/></div>
+          <div class="fi"><label>Comisión mantenimiento (%)</label><input id="t-pct-mant" type="number" min="0" max="100" step="0.5" placeholder="0–100"/></div>
+          <div class="fi full"><label>Notas</label><textarea id="t-notas" rows="2" placeholder="Observaciones opcionales…"></textarea></div>
+          <div class="fi full" style="display:flex;align-items:center;gap:8px">
+            <input id="t-activo" type="checkbox" checked style="width:auto;margin:0"/>
+            <label for="t-activo" style="margin:0;cursor:pointer">Técnico activo</label>
+          </div>
+        </div>
+        <div class="fa">
+          <button type="button" class="btn bg" onclick="closeOv('ov-tecnico')">Cancelar</button>
+          <button type="submit" class="btn bp" id="btn-st">Guardar</button>
         </div>
       </form>
     </div>

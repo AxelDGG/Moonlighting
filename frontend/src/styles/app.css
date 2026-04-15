@@ -1346,6 +1346,47 @@ tbody tr {
 .pill-levantamiento { background: #f3e8ff; color: #7c3aed; display: inline-flex; align-items: center; gap: 4px; }
 .pill-mantenimiento { background: #ffedd5; color: #c2410c; display: inline-flex; align-items: center; gap: 4px; }
 
+/* ── ROUTE PLANNER ─────────────────────────────────────────────────────────── */
+.route-overload {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 12px;
+  color: #dc2626; font-size: 12.5px; line-height: 1.5;
+}
+.route-summary {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  font-size: 12px; color: var(--mu); margin-bottom: 14px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--bo);
+}
+.route-summary span { display: flex; align-items: center; gap: 4px; }
+.route-list { display: flex; flex-direction: column; gap: 0; }
+.route-stop {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--bg); border: 1px solid var(--bo); border-radius: 8px;
+  padding: 10px 12px;
+}
+.route-base { background: #f8fafc; opacity: .8; }
+.route-num {
+  min-width: 24px; height: 24px; border-radius: 50%;
+  background: var(--p); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.route-base .route-num { background: #94a3b8; font-size: 13px; }
+.route-info { flex: 1; min-width: 0; }
+.route-travel {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--mu);
+  padding: 4px 0 4px 34px;
+}
+.mf-field select {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--bo); border-radius: 7px;
+  font-size: 12.5px; font-family: inherit;
+  background: var(--card); color: var(--text); outline: none;
+}
+.mf-field select:focus { border-color: var(--p); }
+
 /* ═══════════════════════════════════════════════════════════════
    CALENDAR CHIP ICONS
 ═══════════════════════════════════════════════════════════════ */

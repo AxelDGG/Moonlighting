@@ -11,6 +11,9 @@ let selectedTelaPrice    = 0;
 let modeloAcIdx = -1;
 let telaAcIdx   = -1;
 
+const COSTO_DESINS_UD      = 100; // $100 por abanico a desinstalar
+const COSTO_TRASLADO_DEFAULT = 200; // traslado fijo por defecto
+
 // ── CLIENT MODE ──────────────────────────────────────────────────────────────
 export function setCliMode(m) {
   cliMode = m;
@@ -42,20 +45,25 @@ export function updatePF() {
 export function calcExtra() {
   const n = parseInt(document.getElementById('p-ndesins').value) || 0;
   const el = document.getElementById('desins-hint');
-  if (el) el.textContent = n > 0 ? `+$${n * 100} adicionales por desinstalación` : '';
+  if (el) el.textContent = n > 0 ? `+$${n * COSTO_DESINS_UD} por desinstalación` : '';
+  calcPedidoTotal();
 }
 
 // ── TOTAL AUTO-CALCULATION ───────────────────────────────────────────────────
 export function calcPedidoTotal() {
-  const tipo = document.getElementById('p-tipo').value;
-  const qty  = parseInt(document.getElementById('p-qty').value) || 1;
+  const tipo     = document.getElementById('p-tipo').value;
+  const qty      = parseInt(document.getElementById('p-qty').value) || 1;
+  const nDesins  = parseInt(document.getElementById('p-ndesins')?.value) || 0;
+  const traslado = parseFloat(document.getElementById('p-traslado')?.value) || 0;
+  const extras   = nDesins * COSTO_DESINS_UD + traslado;
+
   if (tipo === 'Abanico' && selectedModeloPrecio > 0) {
-    document.getElementById('p-total').value = (qty * selectedModeloPrecio).toFixed(2);
+    document.getElementById('p-total').value = (qty * selectedModeloPrecio + extras).toFixed(2);
   } else if (tipo === 'Persiana' && selectedTelaPrice > 0) {
     const ancho = parseFloat(document.getElementById('p-ancho').value) || 0;
     const alto  = parseFloat(document.getElementById('p-alto').value)  || 0;
     const m2    = (ancho / 100) * (alto / 100);
-    document.getElementById('p-total').value = (qty * m2 * selectedTelaPrice).toFixed(2);
+    document.getElementById('p-total').value = (qty * m2 * selectedTelaPrice + extras).toFixed(2);
   }
 }
 
@@ -223,6 +231,10 @@ export function openPedidoModal(id = null) {
     tecSel.appendChild(opt);
   });
 
+  // Set default traslado
+  const trasladoEl = document.getElementById('p-traslado');
+  if (trasladoEl) trasladoEl.value = COSTO_TRASLADO_DEFAULT;
+
   if (!id) { document.getElementById('p-tipo').value = 'Abanico'; updatePF(); }
   if (id !== null) {
     const p = state.pedidos.find(x => x.id === id); if (!p) return;
@@ -232,6 +244,7 @@ export function openPedidoModal(id = null) {
     document.getElementById('p-fecha').value = p.fecha || todayStr();
     document.getElementById('p-qty').value   = p.cantidad;
     document.getElementById('p-total').value = p.total;
+    if (trasladoEl) trasladoEl.value = p.detalles?.traslado ?? COSTO_TRASLADO_DEFAULT;
     updatePF();
     const d = p.detalles || {};
     if (p.tipoServicio === 'Abanico') {
@@ -314,11 +327,12 @@ export async function submitPedido(e) {
         }
       }
     }
+    const traslado = parseFloat(document.getElementById('p-traslado')?.value) || 0;
     let detalles = {};
-    if (tipo === 'Abanico')       detalles = { modelo: document.getElementById('p-modelo').value.trim(), nDesins: parseInt(document.getElementById('p-ndesins').value) || 0 };
-    else if (tipo === 'Persiana') detalles = { ancho: +document.getElementById('p-ancho').value, alto: +document.getElementById('p-alto').value, instalacion: document.getElementById('p-inst').value, tipoTela: document.getElementById('p-tela').value.trim() };
-    else if (tipo === 'Limpieza') detalles = { modelo: document.getElementById('p-modelo').value.trim(), notas: document.getElementById('p-notas').value.trim() };
-    else                          detalles = { notas: document.getElementById('p-notas').value.trim() };
+    if (tipo === 'Abanico')       detalles = { modelo: document.getElementById('p-modelo').value.trim(), nDesins: parseInt(document.getElementById('p-ndesins').value) || 0, traslado };
+    else if (tipo === 'Persiana') detalles = { ancho: +document.getElementById('p-ancho').value, alto: +document.getElementById('p-alto').value, instalacion: document.getElementById('p-inst').value, tipoTela: document.getElementById('p-tela').value.trim(), traslado };
+    else if (tipo === 'Limpieza') detalles = { modelo: document.getElementById('p-modelo').value.trim(), notas: document.getElementById('p-notas').value.trim(), traslado };
+    else                          detalles = { notas: document.getElementById('p-notas').value.trim(), traslado };
 
     btn.innerHTML = '<span class="sp"></span> Guardando…';
     const cli = clienteId ? state.clientes.find(c => c.id === clienteId) : null;

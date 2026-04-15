@@ -9,6 +9,12 @@ let calDate = new Date();
 const DIAS  = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
+// Convierte un Date a "YYYY-MM-DD" usando hora LOCAL (no UTC) para evitar
+// el desfase de zona horaria que produce toISOString() en México (UTC-6).
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function getWeekDays(d) {
   const dow = d.getDay(), diff = dow === 0 ? -6 : 1 - dow, mon = new Date(d);
   mon.setDate(d.getDate() + diff);
@@ -34,7 +40,7 @@ function renderCalWeek() {
   document.getElementById('cal-title').textContent = `${d0.getDate()} ${MESES[d0.getMonth()].slice(0, 3)} — ${d6.getDate()} ${MESES[d6.getMonth()].slice(0, 3)} ${d6.getFullYear()}`;
   let html = '<div class="cal-week">';
   days.forEach((day, i) => {
-    const ds = day.toISOString().split('T')[0], isT = ds === todayS;
+    const ds = localDateStr(day), isT = ds === todayS;
     const dps = state.pedidos.filter(p => p.fecha === ds);
     html += `<div class="cal-day-col"><div class="cal-day-hd${isT ? ' today' : ''}"><div class="cal-dn">${DIAS[i]}</div><div class="cal-dd" onclick="goToDay('${ds}')">${day.getDate()}</div>${dps.length ? `<div style="font-size:10px;margin-top:1px;opacity:.75">${dps.length} pedido${dps.length > 1 ? 's' : ''}</div>` : ''}</div>
       <div class="cal-day-bd">${dps.map(p => {
@@ -55,7 +61,7 @@ function renderCalWeek() {
 }
 
 function renderCalDay() {
-  const ds = calDate.toISOString().split('T')[0];
+  const ds = localDateStr(calDate);
   const wd = calDate.toLocaleDateString('es', { weekday: 'long' });
   document.getElementById('cal-title').textContent = `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${calDate.getDate()} de ${MESES[calDate.getMonth()]} ${calDate.getFullYear()}`;
   const dps = state.pedidos.filter(p => p.fecha === ds);

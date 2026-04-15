@@ -10,9 +10,10 @@ import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedid
          onTelaInput, onTelaKey, onTelaBlur, selectTela } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
-import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect } from './modules/mapa.js';
+import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect, generateDayRoute, onRouteDayChange } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen } from './modules/almacenamiento.js';
+import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
@@ -209,7 +210,9 @@ window.onMfKey         = onMfKey;
 window.selectAcItem    = selectAcItem;
 window.toggleMapTipo   = toggleMapTipo;
 window.resetMapFilter  = resetMapFilter;
-window.onMfSelect      = onMfSelect;
+window.onMfSelect        = onMfSelect;
+window.generateDayRoute  = generateDayRoute;
+window.onRouteDayChange  = onRouteDayChange;
 
 // Modals
 window.openOv  = openOv;
@@ -223,6 +226,12 @@ window.renderAlmacenamiento = renderAlmacenamiento;
 window.openAlmacenModal     = openAlmacenModal;
 window.submitAlmacen        = submitAlmacen;
 window.deleteAlmacen        = deleteAlmacen;
+
+// Técnicos
+window.openTecnicosManager = openTecnicosManager;
+window.openTecnicoModal    = openTecnicoModal;
+window.submitTecnico       = submitTecnico;
+window.deleteTecnico       = deleteTecnico;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();

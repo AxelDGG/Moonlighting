@@ -9,6 +9,14 @@ let map = null;
 let mapMarkers = [];
 let muniZones = [];
 let activeLayers = {};
+let routePolyline = null;
+
+// ── ROUTE PLANNER CONSTANTS ───────────────────────────────────────────────────
+const BASE_LAT = 25.6866, BASE_LNG = -100.3161; // Bodega base – Monterrey
+const VEL_KMH           = 30;  // velocidad promedio urbana
+const TIEMPO_SERVICIO   = 90;  // minutos promedio por servicio
+const MAX_PEDIDOS_AVISO = 6;   // alerta de sobrecarga por cantidad
+const MAX_TRASLADO_AVISO = 120; // alerta de sobrecarga por minutos de traslado total
 
 let _mapFilterReady = false;
 let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set(), estado: '', zona: '' };
@@ -413,4 +421,211 @@ function updateMapCount() {
   el.innerHTML = isFiltered
     ? `<b>${shown}</b> de ${total} clientes`
     : `<b>${total}</b> cliente${total !== 1 ? 's' : ''}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROUTE PLANNER
+// ══════════════════════════════════════════════════════════════════════════════
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function travelMin(lat1, lng1, lat2, lng2) {
+  return Math.round(haversineKm(lat1, lng1, lat2, lng2) / VEL_KMH * 60);
+}
+
+function nearestNeighbor(stops) {
+  // stops: [{ id, lat, lng, nombre, hora, ... }]
+  if (!stops.length) return [];
+  // Separate pinned (have hora_programada) from free stops
+  const pinned = stops.filter(s => s.hora).sort((a, b) => a.hora.localeCompare(b.hora));
+  const free   = stops.filter(s => !s.hora);
+  // Build ordered list: respect pinned positions, fill gaps with nearest-neighbor
+  const ordered = [];
+  const remaining = [...free];
+  let curLat = BASE_LAT, curLng = BASE_LNG;
+  const allPinned = [...pinned];
+
+  // Nearest neighbor among free stops until next pinned time constraint
+  while (remaining.length || allPinned.length) {
+    // If next pinned stop is "due" (no free stops closer), take it
+    if (!remaining.length && allPinned.length) {
+      const p = allPinned.shift();
+      ordered.push(p);
+      curLat = p.lat; curLng = p.lng;
+      continue;
+    }
+    if (!allPinned.length && remaining.length) {
+      // Pure NN among free
+      let best = 0, bestDist = Infinity;
+      remaining.forEach((s, i) => {
+        const d = haversineKm(curLat, curLng, s.lat, s.lng);
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+      const s = remaining.splice(best, 1)[0];
+      ordered.push(s);
+      curLat = s.lat; curLng = s.lng;
+      continue;
+    }
+    // Both exist: pick whichever is closer, respecting pinned time
+    const nextPinned = allPinned[0];
+    let best = 0, bestDist = Infinity;
+    remaining.forEach((s, i) => {
+      const d = haversineKm(curLat, curLng, s.lat, s.lng);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    const distPinned = haversineKm(curLat, curLng, nextPinned.lat, nextPinned.lng);
+    if (distPinned <= bestDist || !remaining.length) {
+      ordered.push(allPinned.shift());
+      curLat = ordered[ordered.length - 1].lat;
+      curLng = ordered[ordered.length - 1].lng;
+    } else {
+      const s = remaining.splice(best, 1)[0];
+      ordered.push(s);
+      curLat = s.lat; curLng = s.lng;
+    }
+  }
+  return ordered;
+}
+
+export function onRouteDayChange() {
+  const sel = document.getElementById('route-day');
+  const customWrap = document.getElementById('route-date-wrap');
+  if (customWrap) customWrap.style.display = sel?.value === 'custom' ? '' : 'none';
+}
+
+export function generateDayRoute() {
+  const body = document.getElementById('route-body');
+  if (!body) return;
+
+  // Determine target date
+  const sel  = document.getElementById('route-day')?.value || 'today';
+  let targetDate;
+  if (sel === 'today') {
+    targetDate = new Date();
+  } else if (sel === 'tomorrow') {
+    targetDate = new Date(); targetDate.setDate(targetDate.getDate() + 1);
+  } else {
+    const v = document.getElementById('route-date-input')?.value;
+    if (!v) { body.innerHTML = '<p style="color:var(--wa);font-size:12px">Selecciona una fecha.</p>'; return; }
+    targetDate = new Date(v + 'T12:00:00');
+  }
+  const ds = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,'0')}-${String(targetDate.getDate()).padStart(2,'0')}`;
+
+  // Gather pedidos for that day
+  const dayPedidos = state.pedidos.filter(p => p.fecha === ds);
+  if (!dayPedidos.length) {
+    body.innerHTML = `<div style="color:var(--mu);font-size:12px;text-align:center;padding:12px">Sin pedidos para este día.</div>`;
+    _clearRoutePolyline();
+    return;
+  }
+
+  // Build stops with coordinates
+  const stops = [];
+  for (const p of dayPedidos) {
+    const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
+    if (!c || !c.lat || !c.lng) continue;
+    const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
+    stops.push({
+      id: p.id, lat: c.lat, lng: c.lng,
+      nombre: c.nombre, dir: c.direccion || '',
+      tipo: p.tipoServicio, total: p.total,
+      hora: sm?.hora_programada || null,
+      tecnico: sm?.tecnico || null,
+      estado: sm?.estado || null,
+    });
+  }
+
+  const sinCoords = dayPedidos.length - stops.length;
+  if (!stops.length) {
+    body.innerHTML = `<div style="color:var(--wa);font-size:12px;text-align:center;padding:12px">Ningún pedido de ese día tiene coordenadas guardadas.</div>`;
+    return;
+  }
+
+  const ordered = nearestNeighbor(stops);
+
+  // Calculate travel times and totals
+  let curLat = BASE_LAT, curLng = BASE_LNG;
+  let totalTravelMin = 0;
+  const legs = ordered.map(s => {
+    const t = travelMin(curLat, curLng, s.lat, s.lng);
+    totalTravelMin += t;
+    curLat = s.lat; curLng = s.lng;
+    return { ...s, travelMin: t };
+  });
+  // Return to base
+  const retorno = travelMin(curLat, curLng, BASE_LAT, BASE_LNG);
+  totalTravelMin += retorno;
+  const totalMin = totalTravelMin + ordered.length * TIEMPO_SERVICIO;
+  const hrs = Math.floor(totalMin / 60), mins = totalMin % 60;
+
+  // Overload detection
+  const overloadPedidos  = ordered.length >= MAX_PEDIDOS_AVISO;
+  const overloadTraslado = totalTravelMin >= MAX_TRASLADO_AVISO;
+  const overload = overloadPedidos || overloadTraslado;
+
+  // Draw polyline on map
+  _drawRoutePolyline([{ lat: BASE_LAT, lng: BASE_LNG }, ...ordered, { lat: BASE_LAT, lng: BASE_LNG }]);
+
+  // Render
+  const statusColors = { programado: '#f59e0b', en_curso: '#3b82f6', completado: '#22c55e', atrasado: '#ef4444' };
+
+  let html = '';
+
+  if (overload) {
+    const reasons = [];
+    if (overloadPedidos)  reasons.push(`<b>${ordered.length} pedidos</b> en un día (máx. recomendado: ${MAX_PEDIDOS_AVISO})`);
+    if (overloadTraslado) reasons.push(`<b>${totalTravelMin} min</b> de traslado total (máx. recomendado: ${MAX_TRASLADO_AVISO} min)`);
+    html += `<div class="route-overload"><i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0"></i><div><b>Sobrecarga detectada:</b> ${reasons.join(' · ')}</div></div>`;
+  }
+
+  html += `<div class="route-summary">
+    <span><i data-lucide="map-pin" style="width:12px;height:12px"></i> <b>${ordered.length}</b> parada${ordered.length !== 1 ? 's' : ''}</span>
+    <span><i data-lucide="clock" style="width:12px;height:12px"></i> Traslados: <b>${totalTravelMin} min</b></span>
+    <span><i data-lucide="timer" style="width:12px;height:12px"></i> Jornada estimada: <b>${hrs}h ${mins}m</b></span>
+    ${sinCoords ? `<span style="color:var(--wa)"><i data-lucide="alert-circle" style="width:12px;height:12px"></i> ${sinCoords} sin coords</span>` : ''}
+  </div>`;
+
+  html += '<div class="route-list">';
+  // Salida
+  html += `<div class="route-stop route-base"><span class="route-num">⌂</span><div class="route-info"><b>Salida — Base Monterrey</b></div></div>`;
+
+  legs.forEach((s, i) => {
+    const dot = s.estado ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${statusColors[s.estado]||'#94a3b8'};margin-right:4px;vertical-align:middle"></span>` : '';
+    html += `
+      <div class="route-travel"><i data-lucide="arrow-down" style="width:11px;height:11px"></i> ${s.travelMin} min (~${(haversineKm(i===0?BASE_LAT:legs[i-1].lat, i===0?BASE_LNG:legs[i-1].lng, s.lat, s.lng)).toFixed(1)} km)</div>
+      <div class="route-stop">
+        <span class="route-num">${i + 1}</span>
+        <div class="route-info">
+          <div style="font-weight:700;font-size:13px">${dot}${esc(s.nombre)}</div>
+          <div style="font-size:11px;color:var(--mu)">${esc(s.tipo)}${s.hora ? ` · <i data-lucide="clock" style="width:10px;height:10px;vertical-align:middle"></i> ${s.hora}` : ''}${s.tecnico ? ` · ${esc(s.tecnico)}` : ''}</div>
+          <div style="font-size:11px;color:var(--mu)">${esc(s.dir)}</div>
+        </div>
+        <span style="font-size:12px;font-weight:700;color:var(--ok);white-space:nowrap">$${parseFloat(s.total||0).toLocaleString('es')}</span>
+      </div>`;
+  });
+
+  html += `<div class="route-travel"><i data-lucide="arrow-down" style="width:11px;height:11px"></i> ${retorno} min (regreso)</div>
+    <div class="route-stop route-base"><span class="route-num">⌂</span><div class="route-info"><b>Regreso — Base Monterrey</b></div></div>`;
+  html += '</div>';
+
+  body.innerHTML = html;
+  refreshIcons(body);
+}
+
+function _drawRoutePolyline(points) {
+  if (!map) return;
+  _clearRoutePolyline();
+  const latlngs = points.map(p => [p.lat, p.lng]);
+  routePolyline = L.polyline(latlngs, {
+    color: '#3b82f6', weight: 3, opacity: 0.75, dashArray: '8,5'
+  }).addTo(map);
+}
+
+function _clearRoutePolyline() {
+  if (routePolyline && map) { map.removeLayer(routePolyline); routePolyline = null; }
 }
