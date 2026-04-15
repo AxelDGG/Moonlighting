@@ -127,12 +127,15 @@ export default async function clientesRoutes(fastify) {
   });
 
   // DELETE /:id - Eliminar cliente
+  // Desvincula pedidos (cliente_id → null) antes de borrar para no bloquear por FK
   fastify.delete('/:id', {
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
-    const { data: pedidos } = await fastify.supabase.from('pedidos').select('id').eq('cliente_id', req.params.id).limit(1);
-    if (pedidos && pedidos.length > 0) return reply.code(400).send({ error: 'No se puede eliminar cliente con pedidos' });
-    const { error } = await fastify.supabase.from('clientes').delete().eq('id', req.params.id);
+    const clienteId = req.params.id;
+    // Desvincular pedidos: preservamos historial, solo quitamos la FK
+    await fastify.supabase.from('pedidos').update({ cliente_id: null }).eq('cliente_id', clienteId);
+    // Eliminar cliente
+    const { error } = await fastify.supabase.from('clientes').delete().eq('id', clienteId);
     if (error) return reply.code(500).send({ error: 'Error al eliminar cliente' });
     return reply.code(204).send();
   });

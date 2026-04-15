@@ -5,6 +5,7 @@ import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
+import { updateMapMarkers } from './mapa.js';
 
 async function geocode(address) {
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`, { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } });
@@ -45,8 +46,13 @@ export async function submitCliente(e) {
   const dir    = document.getElementById('c-d').value.trim();
   const pago   = document.getElementById('c-p').value;
   const np     = document.getElementById('c-np').value.trim();
-  let { lat, lng, municipio } = state.clientes[ci];
-  if (dir !== state.clientes[ci].direccion) {
+  const addressChanged = dir !== state.clientes[ci].direccion;
+  // Start with cleared coords when address changes — prevents stale pin on map
+  let lat = addressChanged ? null : state.clientes[ci].lat;
+  let lng = addressChanged ? null : state.clientes[ci].lng;
+  let municipio = addressChanged ? 'Desconocido' : (state.clientes[ci].municipio || 'Desconocido');
+  if (addressChanged) {
+    btn.innerHTML = '<span class="sp"></span> Geocodificando…';
     try { const g = await geocode(dir); if (g) { lat = g.lat; lng = g.lng; municipio = g.municipio; } } catch (_) {}
   }
   const updated = { ...state.clientes[ci], nombre, numero, direccion: dir, metodoPago: pago, numPedido: np, lat, lng, municipio };
@@ -55,6 +61,8 @@ export async function submitCliente(e) {
     state.clientes[ci] = updated;
     toast('Cliente actualizado');
     renderClientes(); renderDash(); closeOv('ov-cli');
+    // Refresh map markers so new pin position and municipio are reflected
+    if (addressChanged) updateMapMarkers();
   } catch (err) { toast('Error: ' + err.message, 'er'); }
   btn.innerHTML = 'Guardar'; btn.disabled = false;
 }
@@ -76,9 +84,20 @@ export async function savePago(id, val) {
 }
 
 export async function deleteCliente(id) {
-  if (!confirm('¿Eliminar este cliente? También se desvincularán sus pedidos.')) return;
-  try { await api.clientes.delete(id); state.clientes = state.clientes.filter(x => x.id !== id); renderClientes(); renderDash(); toast('Cliente eliminado', 'er'); }
-  catch (err) { toast('Error: ' + err.message, 'er'); }
+  const c = state.clientes.find(x => x.id === id);
+  const pedidosCli = state.pedidos.filter(p => +p.clienteId === id);
+  const msg = pedidosCli.length
+    ? `¿Eliminar a ${c?.nombre || 'este cliente'}?\nTiene ${pedidosCli.length} pedido(s) que quedarán sin cliente asignado.`
+    : `¿Eliminar a ${c?.nombre || 'este cliente'}?`;
+  if (!confirm(msg)) return;
+  try {
+    await api.clientes.delete(id);
+    state.clientes = state.clientes.filter(x => x.id !== id);
+    // Pedidos en estado local: desvinculamos el clienteId para mantener consistencia
+    state.pedidos = state.pedidos.map(p => +p.clienteId === id ? { ...p, clienteId: null } : p);
+    renderClientes(); renderDash();
+    toast('Cliente eliminado');
+  } catch (err) { toast('Error: ' + err.message, 'er'); }
 }
 
 export function renderClientes() {
