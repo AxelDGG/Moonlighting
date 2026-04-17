@@ -92,10 +92,9 @@ function applyRoleRestrictions() {
     hide('nav-mapa');
   }
 
-  // Configuración: solo admin
-  if (!admin) {
-    hide('nav-configuracion');
-  }
+  // Configuración: solo admin — mostrar explícitamente (arranca con display:none en HTML)
+  const navCfg = document.getElementById('nav-configuracion');
+  if (navCfg) navCfg.style.display = admin ? '' : 'none';
 
   // Porcentajes de técnicos: ocultar columnas/sección
   if (!admin && perms.ver_porcentajes === false) {
