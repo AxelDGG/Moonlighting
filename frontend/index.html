@@ -229,6 +229,23 @@
               <button class="btn bg bsm" id="btn-cd" onclick="setCalMode('day')">Día</button>
             </div>
           </div>
+          <!-- Filtros calendario -->
+          <div style="padding:8px 14px;border-bottom:1px solid var(--bo);display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <div id="cal-f-chips" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+            <select id="cal-f-tecnico" class="mf-sel" onchange="calSetFilter('tecnico')" style="font-size:12px;padding:4px 8px;border:1px solid var(--bo);border-radius:6px;background:var(--card);color:var(--text)">
+              <option value="">Todos los técnicos</option>
+            </select>
+            <select id="cal-f-estado" class="mf-sel" onchange="calSetFilter('estado')" style="font-size:12px;padding:4px 8px;border:1px solid var(--bo);border-radius:6px;background:var(--card);color:var(--text)">
+              <option value="">Todos los estados</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="en_camino">En camino</option>
+              <option value="en_sitio">En sitio</option>
+              <option value="completado">Completado</option>
+              <option value="reagendado">Reagendado</option>
+            </select>
+            <button id="cal-f-cancelados" class="btn bg bsm" onclick="calToggleCancelados()" title="Mostrar cancelados" style="font-size:11px">Cancelados</button>
+            <button id="cal-f-reset" class="btn bd bsm" onclick="calResetFilter()" style="font-size:11px;display:none" title="Limpiar filtros">✕ Limpiar</button>
+          </div>
           <div class="cb" id="cal-body"></div>
         </div>
       </section>

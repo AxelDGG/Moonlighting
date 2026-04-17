@@ -8,7 +8,7 @@ import { renderClientes, openClienteModal, submitCliente, editPago, savePago, de
 import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
          onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled } from './modules/pedidos.js';
-import { renderCal, calNav, calToday, setCalMode, goToDay } from './modules/calendar.js';
+import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
          generateDayRoute, onRouteDayChange, openRouteConfig, saveRouteConfig, closeRouteConfig, onRouteConfigChange,
@@ -271,12 +271,16 @@ window.selectTela            = selectTela;
 window.toggleShowCancelled   = toggleShowCancelled;
 
 // Calendar
-window.renderCal    = renderCal;
-window.calNav       = calNav;
-window.calToday     = calToday;
-window.setCalMode   = setCalMode;
-window.goToDay      = goToDay;
-window.syncOutlook  = syncOutlook;
+window.renderCal          = renderCal;
+window.calNav             = calNav;
+window.calToday           = calToday;
+window.setCalMode         = setCalMode;
+window.goToDay            = goToDay;
+window.syncOutlook        = syncOutlook;
+window.calSetTipo         = calSetTipo;
+window.calSetFilter       = calSetFilter;
+window.calToggleCancelados = calToggleCancelados;
+window.calResetFilter     = calResetFilter;
 
 // Tracking
 window.openTrackModal  = openTrackModal;
