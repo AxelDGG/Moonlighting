@@ -82,7 +82,16 @@ async function _loadProfiles() {
     _profiles = await api.userProfiles.getAll();
     _renderProfiles();
   } catch (err) {
-    body.innerHTML = `<div style="color:var(--err);font-size:13px">Error: ${esc(err.message)}</div>`;
+    const isNotFound = err.message?.toLowerCase().includes('not found') || err.message?.includes('404');
+    if (isNotFound) {
+      body.innerHTML = `<div style="color:var(--mu);font-size:13px;display:flex;align-items:center;gap:8px;padding:8px 0">
+        <i data-lucide="cloud-off" style="width:15px;height:15px;flex-shrink:0"></i>
+        Módulo de usuarios no disponible en este entorno.
+      </div>`;
+      refreshIcons(body);
+    } else {
+      body.innerHTML = `<div style="color:var(--err);font-size:13px">Error: ${esc(err.message)}</div>`;
+    }
   }
 }
 
