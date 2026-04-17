@@ -75,6 +75,9 @@ export default async function clientesRoutes(fastify) {
         lng:          body.lng  || null,
         metodo_pago:  body.metodo_pago || 'Efectivo',
         num_pedido:   body.num_pedido  || null,
+        google_maps_url: body.google_maps_url || null,
+        codigo_postal:   body.codigo_postal   || null,
+        zona:            body.zona            || null,
       };
       const { data, error } = await fastify.supabase
         .from('clientes').insert(clienteRow).select().single();
@@ -121,6 +124,10 @@ export default async function clientesRoutes(fastify) {
       telefono_alt:body.telefono_alt !== undefined ? body.telefono_alt : undefined,
       email:       body.email       !== undefined ? body.email       : undefined,
       notas_cliente: body.notas_cliente !== undefined ? body.notas_cliente : undefined,
+      google_maps_url: body.google_maps_url !== undefined ? body.google_maps_url : undefined,
+      codigo_postal:   body.codigo_postal   !== undefined ? body.codigo_postal   : undefined,
+      zona:            body.zona            !== undefined ? body.zona            : undefined,
+      activo:          body.activo          !== undefined ? body.activo          : undefined,
     };
     // Remove undefined keys
     Object.keys(row).forEach(k => row[k] === undefined && delete row[k]);

@@ -57,6 +57,9 @@ export function cFromDb(r) {
     lng:         r.lng          || null,
     metodoPago:  r.metodo_pago  || 'Efectivo',
     numPedido:   r.num_pedido   || null,
+    googleMapsUrl: r.google_maps_url || null,
+    codigoPostal:  r.codigo_postal   || null,
+    zona:          r.zona            || null,
     // campos nuevos
     telefono:    r.telefono     || r.numero   || '',
     telefonoAlt: r.telefono_alt || null,
@@ -79,6 +82,9 @@ export function cToDb(c) {
     lng:          c.lng          || null,
     metodo_pago:  c.metodoPago   || 'Efectivo',
     num_pedido:   c.numPedido    || null,
+    google_maps_url: c.googleMapsUrl || null,
+    codigo_postal:   c.codigoPostal  || null,
+    zona:            c.zona           || null,
     // nuevo
     telefono:     c.telefono     || c.numero    || null,
     telefono_alt: c.telefonoAlt  || null,
