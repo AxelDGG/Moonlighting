@@ -89,8 +89,9 @@ export default async function userProfilesRoutes(fastify) {
         required: ['email'],
         properties: {
           email:       { type: 'string' },
-          role:        { type: 'string', enum: ['admin', 'gestor'] },
+          role:        { type: 'string', enum: ['admin', 'gestor', 'tecnico'] },
           permissions: permissionsSchema,
+          tecnico_id:  { type: ['integer', 'null'] },
         },
         additionalProperties: false,
       },
