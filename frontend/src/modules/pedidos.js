@@ -10,6 +10,17 @@ let selectedModeloPrecio = 0;
 let selectedTelaPrice    = 0;
 let modeloAcIdx = -1;
 let telaAcIdx   = -1;
+let _showCancelled = false;
+
+export function toggleShowCancelled() {
+  _showCancelled = !_showCancelled;
+  const btn = document.getElementById('btn-toggle-cancelled');
+  if (btn) {
+    btn.classList.toggle('on', _showCancelled);
+    btn.title = _showCancelled ? 'Ocultar cancelados' : 'Mostrar cancelados';
+  }
+  renderPedidos();
+}
 
 const COSTO_DESINS_UD      = 100; // $100 por abanico a desinstalar
 const COSTO_TRASLADO_DEFAULT = 200; // traslado fijo por defecto
@@ -389,33 +400,47 @@ async function geocodeAddress(address) {
 }
 
 export async function deletePedido(id) {
-  if (!confirm('¿Eliminar este pedido?')) return;
+  if (!confirm('¿Cancelar este pedido? Quedará marcado como cancelado.')) return;
   try {
-    const sm = state.servicios_metricas.find(s => s.pedido_id === id);
-    if (sm) { await api.metricas.update(sm.id, { estado: 'cancelado' }); state.servicios_metricas = state.servicios_metricas.filter(s => s.id !== sm.id); }
     await api.pedidos.delete(id);
-    state.pedidos = state.pedidos.filter(x => x.id !== id);
-    renderPedidos(); renderDash(); toast('Pedido eliminado', 'er');
+    // Marcar como cancelado en estado local (soft delete)
+    const pi = state.pedidos.findIndex(x => x.id === id);
+    if (pi !== -1) state.pedidos[pi] = { ...state.pedidos[pi], estado: 'cancelado' };
+    renderPedidos(); renderDash(); toast('Pedido cancelado');
   } catch (err) { toast('Error: ' + err.message, 'er'); }
 }
 
 export function renderPedidos() {
   const q = (document.getElementById('qp')?.value || '').toLowerCase();
   const tbody = document.getElementById('tbp'), empty = document.getElementById('ep');
+
+  // Sincronizar botón de toggle
+  const btn = document.getElementById('btn-toggle-cancelled');
+  if (btn) {
+    btn.classList.toggle('on', _showCancelled);
+    btn.title = _showCancelled ? 'Ocultar cancelados' : 'Mostrar cancelados';
+  }
+
+  const isCancelled = p => (p.estado || '').toLowerCase() === 'cancelado';
+
   const list = state.pedidos.filter(p => {
+    if (!_showCancelled && isCancelled(p)) return false;
     const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
-    return String(p.id).includes(q) || p.tipoServicio.toLowerCase().includes(q) ||
+    return String(p.id).includes(q) || (p.tipoServicio || '').toLowerCase().includes(q) ||
       (p.detalles?.modelo || '').toLowerCase().includes(q) ||
       (p.detalles?.tipoTela || '').toLowerCase().includes(q) ||
       (c?.nombre || '').toLowerCase().includes(q) ||
       (p.fecha || '').includes(q);
   });
+
   if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
+
   tbody.innerHTML = list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(p => {
-    const c  = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
-    const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-    return `<tr>
+    const c       = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
+    const sm      = state.servicios_metricas.find(s => s.pedido_id === p.id);
+    const cancelled = isCancelled(p);
+    return `<tr${cancelled ? ' style="opacity:0.5"' : ''}>
       <td data-label="ID"><span class="pill pi">#${p.id}</span></td>
       <td data-label="Fecha" class="nw">${fdateShort(p.fecha)}</td>
       <td data-label="Cliente">${c ? `<span class="bold">${esc(c.nombre)}</span>` : '<span class="mu">Sin cliente</span>'}</td>
@@ -423,20 +448,23 @@ export function renderPedidos() {
       <td data-label="Detalle">${pedidoDetalle(p)}</td>
       <td data-label="Cant." class="tr">${p.cantidad}</td>
       <td data-label="Total" class="bold grn nw">${money(p.total)}</td>
-      <td data-label="Estado">${sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
+      <td data-label="Estado">${cancelled ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-weight:600">Cancelado</span>' : sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
       <td class="nw">
+        ${!cancelled ? `
         <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">
           <i data-lucide="map-pin" style="width:12px;height:12px"></i>
         </button>
         <button class="btn bw bsm" onclick="openPedidoModal(${p.id})" title="Editar">
           <i data-lucide="pencil" style="width:12px;height:12px"></i>
         </button>
-        <button class="btn bd bsm" onclick="deletePedido(${p.id})" title="Eliminar">
+        <button class="btn bd bsm" onclick="deletePedido(${p.id})" title="Cancelar">
           <i data-lucide="trash-2" style="width:12px;height:12px"></i>
-        </button>
+        </button>` : '—'}
       </td></tr>`;
   }).join('');
-  badge(state.pedidos.length + ' pedidos');
+
+  const activeCount = state.pedidos.filter(p => !isCancelled(p)).length;
+  badge(activeCount + ' pedidos');
   refreshIcons(tbody);
 }
 

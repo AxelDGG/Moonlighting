@@ -67,6 +67,9 @@
       <div class="ni-item" id="nav-metricas" onclick="showTab('metricas')">
         <span class="ic"><i data-lucide="bar-chart-2"></i></span>Métricas
       </div>
+      <div class="ni-item" id="nav-configuracion" onclick="showTab('configuracion')" style="display:none">
+        <span class="ic"><i data-lucide="settings"></i></span>Configuración
+      </div>
     </nav>
     <div class="sf"><span class="sf-dot" id="db-dot"></span><span id="db-status">Conectando…</span></div>
     <div class="sf-logout">
@@ -115,10 +118,12 @@
           <div class="ch">
             <h2>Registro de Clientes</h2>
             <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn bg bsm" id="btn-toggle-inactive" onclick="toggleShowInactive()" title="Mostrar eliminados">
+                <i data-lucide="eye-off" style="width:13px;height:13px"></i> Eliminados
+              </button>
               <button class="btn bg bsm" onclick="exportClientes()">
                 <i data-lucide="download" style="width:13px;height:13px"></i> Exportar CSV
               </button>
-              <span class="mu" style="font-size:11.5px">Creados automáticamente al agregar un pedido</span>
             </div>
           </div>
           <div class="cb">
@@ -145,6 +150,9 @@
           <div class="ch">
             <h2>Registro de Pedidos</h2>
             <div style="display:flex;gap:8px">
+              <button class="btn bg bsm" id="btn-toggle-cancelled" onclick="toggleShowCancelled()" title="Mostrar cancelados">
+                <i data-lucide="eye-off" style="width:13px;height:13px"></i> Cancelados
+              </button>
               <button class="btn bg bsm" onclick="exportPedidos()">
                 <i data-lucide="download" style="width:13px;height:13px"></i> Exportar CSV
               </button>
@@ -260,6 +268,12 @@
               <option value="">Todas</option>
             </select>
           </div>
+          <div class="mf-field">
+            <label><i data-lucide="hard-hat" style="width:12px;height:12px"></i> Instalador</label>
+            <select id="mf-tecnico" onchange="onMfSelect('tecnico')">
+              <option value="">Todos</option>
+            </select>
+          </div>
           <div class="mf-bar-section"><div class="mf-chips-bar" id="mf-chips"></div></div>
           <div class="mf-bar-section">
             <span class="mf-bar-count" id="mf-count">—</span>
@@ -286,6 +300,15 @@
               <i data-lucide="navigation" style="width:15px;height:15px"></i> Generar Ruta
             </h2>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <!-- Configuración de ruta (técnico + salida/llegada) -->
+              <select id="route-config-sel" onchange="onRouteConfigChange()" style="padding:6px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;font-family:inherit;background:var(--card);color:var(--text);max-width:220px">
+                <option value="">— Config predeterminada —</option>
+              </select>
+              <button class="btn bg bsm" onclick="openRouteConfig()" title="Configurar técnico y puntos de inicio/fin">
+                <i data-lucide="settings-2" style="width:13px;height:13px"></i> Configurar
+              </button>
+              <span id="route-tecnico-label" style="font-size:11px;color:var(--mu)"></span>
+              <!-- Día -->
               <select id="route-day" onchange="onRouteDayChange()" style="padding:6px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;font-family:inherit;background:var(--card);color:var(--text)">
                 <option value="today">Hoy</option>
                 <option value="tomorrow">Mañana</option>
@@ -302,8 +325,18 @@
           <div class="cb" id="route-body">
             <div style="color:var(--mu);font-size:12px;text-align:center;padding:8px">Selecciona un día y presiona <b>Generar ruta</b>.</div>
           </div>
+          <!-- Rutas guardadas -->
+          <div style="border-top:1px solid var(--bo);padding:12px 16px">
+            <div style="font-size:12px;font-weight:600;color:var(--mu);margin-bottom:8px;display:flex;align-items:center;gap:5px">
+              <i data-lucide="bookmark" style="width:12px;height:12px"></i> Rutas guardadas
+            </div>
+            <div id="routes-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
         </div>
       </section>
+
+      <!-- CONFIGURACIÓN (solo admin) -->
+      <section class="tab" id="tab-configuracion"></section>
 
       <!-- MÉTRICAS -->
       <section class="tab" id="tab-metricas">
@@ -589,6 +622,46 @@
           <button type="submit" class="btn bp" id="btn-st">Guardar</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal configuración de ruta -->
+<div class="ov" id="ov-route-config">
+  <div class="modal" style="width:480px">
+    <div class="mh">
+      <h3><i data-lucide="settings-2" style="width:15px;height:15px;vertical-align:middle;margin-right:5px"></i>Configurar ruta</h3>
+      <button class="mc" onclick="closeRouteConfig()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <div class="fi full">
+          <label>Nombre de esta configuración</label>
+          <input id="rc-nombre" type="text" placeholder="Ej: Ruta Carlos – Norte"/>
+        </div>
+        <div class="fi full">
+          <label>Técnico asignado</label>
+          <select id="rc-tecnico" style="width:100%;padding:7px 10px;border:1px solid var(--bo);border-radius:7px;font-size:13px;outline:none;font-family:inherit;background:var(--bg);color:var(--text)">
+            <option value="">— Sin técnico asignado —</option>
+          </select>
+        </div>
+        <div class="fi full">
+          <label><i data-lucide="flag" style="width:12px;height:12px;vertical-align:middle"></i> Punto de salida</label>
+          <input id="rc-start-addr" type="text" placeholder="Ej: Bodega Monterrey, Av. Constitución 1500"/>
+          <small style="color:var(--mu);font-size:11px">Se geocodificará automáticamente</small>
+        </div>
+        <div class="fi full">
+          <label><i data-lucide="flag-off" style="width:12px;height:12px;vertical-align:middle"></i> Punto de llegada</label>
+          <input id="rc-end-addr" type="text" placeholder="Ej: misma bodega o domicilio del técnico"/>
+          <small style="color:var(--mu);font-size:11px">Dejar vacío para usar el mismo que la salida</small>
+        </div>
+      </div>
+      <div class="fa">
+        <button type="button" class="btn bg" onclick="closeRouteConfig()">Cancelar</button>
+        <button type="button" class="btn bp" id="btn-rc-save" onclick="saveRouteConfig()">
+          <i data-lucide="save" style="width:13px;height:13px"></i> Guardar
+        </button>
+      </div>
     </div>
   </div>
 </div>

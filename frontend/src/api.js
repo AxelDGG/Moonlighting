@@ -127,4 +127,25 @@ export const api = {
   calendar: {
     sync: (pedidoId) => post(`/calendar/sync/${pedidoId}`),
   },
+
+  // ========== ROUTE CONFIGS ==========
+  routeConfigs: {
+    getAll:      (tecnicoId) => get(`/route-configs${tecnicoId ? `?tecnico_id=${tecnicoId}` : ''}`),
+    create:      (data)      => post('/route-configs', data),
+    update:      (id, data)  => put(`/route-configs/${id}`, data),
+    delete:      (id)        => del(`/route-configs/${id}`),
+  },
+
+  // ========== USER PROFILES ==========
+  userProfiles: {
+    me:       ()          => get('/user-profiles/me'),
+    getAll:   ()          => get('/user-profiles'),
+    create:   (data)      => post('/user-profiles', data),
+    update:   (id, data)  => put(`/user-profiles/${id}`, data),
+  },
+
+  // ========== CLIENTES (con inactivos) ==========
+  clientesAll: {
+    getAll: () => get('/clientes?include_inactive=true'),
+  },
 };

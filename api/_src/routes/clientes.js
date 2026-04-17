@@ -34,12 +34,16 @@ const direccionSchema = {
 export default async function clientesRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
 
-  // GET / - Listar clientes
+  // GET / - Listar clientes (activos por defecto; ?include_inactive=true para ver todos)
   fastify.get('/', async (req, reply) => {
-    const { data, error } = await fastify.supabase
+    let query = fastify.supabase
       .from('clientes')
       .select(`*, cliente_direcciones(id, alias, calle, numero_ext, colonia, municipio, google_maps_url, lat, lng, es_principal)`)
       .order('id');
+    if (req.query.include_inactive !== 'true') {
+      query = query.eq('activo', true);
+    }
+    const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'Error al cargar clientes' });
     return data;
   });
@@ -126,16 +130,12 @@ export default async function clientesRoutes(fastify) {
     return reply.code(204).send();
   });
 
-  // DELETE /:id - Eliminar cliente
-  // Desvincula pedidos (cliente_id → null) antes de borrar para no bloquear por FK
+  // DELETE /:id - Soft delete (activo = false)
   fastify.delete('/:id', {
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const clienteId = req.params.id;
-    // Desvincular pedidos: preservamos historial, solo quitamos la FK
-    await fastify.supabase.from('pedidos').update({ cliente_id: null }).eq('cliente_id', clienteId);
-    // Eliminar cliente
-    const { error } = await fastify.supabase.from('clientes').delete().eq('id', clienteId);
+    const { error } = await fastify.supabase.from('clientes').update({ activo: false }).eq('id', clienteId);
     if (error) return reply.code(500).send({ error: 'Error al eliminar cliente' });
     return reply.code(204).send();
   });

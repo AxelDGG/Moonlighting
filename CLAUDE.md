@@ -39,8 +39,8 @@ api/
   src/
     config.js     env vars destructured at module top (esbuild constraint — see below)
     app.js        createApp() — registers plugins then routes
-    plugins/      cors, helmet, rate-limit, supabase, auth
-    routes/       clientes, pedidos, metricas, ai
+    plugins/      cors, helmet, rate-limit, supabase, auth, msgraph
+    routes/       clientes, pedidos, metricas, ai, calendar, tecnicos, pagos, catalogo, servicios, inventario, almacenamiento
 
 frontend/
   index.html
@@ -48,11 +48,11 @@ frontend/
     main.js       entry — wires auth, assigns window.* globals for HTML onclick handlers
     api.js        fetch wrapper — attaches Bearer token, all requests go to /api/*
     auth.js       Supabase client (VITE_ env vars), token stored in module-level _token
-    state.js      3 global arrays + DB row mappers (cFromDb/pFromDb/smFromDb)
+    state.js      global state arrays + DB row mappers (cFromDb/pFromDb/smFromDb)
     ui.js         toast, loader, overlay helpers, badge
     constants.js  TIPO_IC, TIPO_BG and other shared constants
     utils.js      money, esc, fdateShort, mdToHtml
-    modules/      dashboard, clientes, pedidos, calendar, mapa, tracking, metricas
+    modules/      dashboard, clientes, pedidos, calendar, mapa, tracking, metricas, tecnicos, almacenamiento
 ```
 
 ### Request flow
@@ -63,7 +63,9 @@ Browser → fetch /api/* → Vite proxy (dev) / Vercel rewrite (prod) → api/in
                                           ↓ route handler → fastify.supabase.from(...)
 ```
 
-Frontend auth: Supabase client in `auth.js` handles login/session → JWT stored in `_token` → `api.js` attaches it as `Authorization: Bearer` on every request.
+Frontend auth: Supabase client in `auth.js` handles login/session → JWT stored in `_token` → `api.js` attaches it as `Authorization: Bearer` on every request. Auth state listener in `auth.js` auto-refreshes `_token` on session changes.
+
+All endpoints require auth — there are no public `/api/*` routes. Each route file applies `fastify.addHook('preHandler', fastify.verifyAuth)` at the module level.
 
 ### Critical Vercel/esbuild constraint
 
@@ -89,11 +91,35 @@ Defaults belong in the callers (`cors.js`, `dev-server.js`), never in `config.js
 
 XSS: always call `esc()` before writing user data into innerHTML. `mdToHtml()` calls `esc()` internally before applying markdown transforms.
 
+After any `innerHTML` update that includes icons, call `refreshIcons()` (from `utils.js`) so Lucide renders `<i data-lucide="...">` elements. Lucide is loaded via CDN in `index.html`.
+
+### Modal/overlay pattern
+
+All modal overlays pre-exist in `index.html` with IDs like `ov-cli`, `ov-ped`, `ov-track`. Modules expose `open*Modal(id)` to populate the form and call `openOv('ov-*')`, and `submit*()` to POST and refresh state. Closing calls `closeOv('ov-*')`.
+
 ### Data layer
 
-`state.js` holds `clientes[]`, `pedidos[]`, `servicios_metricas[]`. Loaded once via `loadAll()` (`Promise.all` of three API calls). All mutations go through `api.js` — no direct Supabase calls from modules.
+`state.js` holds master data (`clientes`, `catalogo`, `tecnicos`, `metodoPago`, `estadosPedido`) and operational data (`pedidos`, `servicios`, `pagos`). Loaded once via `loadAll()`. All mutations go through `api.js` — no direct Supabase calls from modules.
 
-DB mappers: `cFromDb`/`cToDb` (clientes), `pFromDb`/`pToDb` (pedidos), `smFromDb` (metricas) — handle snake_case ↔ camelCase conversion.
+DB mappers: `cFromDb`/`cToDb` (clientes), `pFromDb`/`pToDb` (pedidos), `smFromDb` (metricas) — handle snake_case ↔ camelCase conversion. Mappers support both legacy and current DB field names for backwards compatibility.
+
+Routes also accept legacy field names (e.g., `numero`/`telefono`) and normalize them server-side before writing to Supabase.
+
+### Supabase queries
+
+Routes use PostgREST nested selects (e.g., `select('*, clientes(*)')`). Several read endpoints query **database views** (`v_pedidos_resumen`, `v_servicios_resumen`, `v_inventario_consolidado`) — changes to underlying tables must keep these views consistent.
+
+Soft delete: deleting a `pedido` sets `estado_id = 'cancelado'` rather than removing the row. Before deleting a `cliente`, the route nullifies all their `pedidos.cliente_id` to avoid FK violations.
+
+### Rate limiting
+
+Global: 120 req/min per authenticated user (falls back to IP). Per-route override: `/api/ai/feedback` is limited to 10 req/min.
+
+### Optional integrations
+
+**Microsoft Graph / Outlook calendar** — enabled when `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_CALENDAR_USER` are set. Token is cached module-level and refreshed on expiry. Routes return 503 if `fastify.msGraph` is `null`. Outlook event IDs are stored inside `pedidos.detalles.outlook_event_id` (JSONB). Timezone is hardcoded to `America/Monterrey`.
+
+**Groq LLM** (`/api/ai/feedback`) — uses `llama-3.3-70b-versatile` via OpenAI-compatible API. Returns Spanish operations feedback. Returns 503 if `GROQ_API_KEY` is missing.
 
 ### Environment variables
 
@@ -104,6 +130,10 @@ DB mappers: `cFromDb`/`cToDb` (clientes), `pFromDb`/`pToDb` (pedidos), `smFromDb
 | `SUPABASE_SERVICE_KEY` | service_role key (secret) |
 | `GROQ_API_KEY` | Groq LLM API key |
 | `FRONTEND_URL` | Allowed CORS origin |
+| `MS_TENANT_ID` | Azure AD tenant (optional) |
+| `MS_CLIENT_ID` | Azure app client ID (optional) |
+| `MS_CLIENT_SECRET` | Azure app secret (optional) |
+| `MS_CALENDAR_USER` | Outlook calendar user UPN (optional) |
 
 **Frontend** (`frontend/.env` locally, Vercel env vars in production — must have `VITE_` prefix):
 | Variable | Purpose |
@@ -113,12 +143,15 @@ DB mappers: `cFromDb`/`cToDb` (clientes), `pFromDb`/`pToDb` (pedidos), `smFromDb
 
 Frontend uses `import.meta.env.VITE_*`. API uses destructured `process.env`. Never mix them.
 
+CORS also reads `process.env.VERCEL_URL` to allow Vercel preview deployment URLs automatically.
+
 ### Vercel config (`vercel.json`)
 
 - **installCommand**: `cd frontend && npm install && cd ../api && npm install` — uses `cd`, not `--prefix` or workspace flags (both caused bundler issues)
 - **buildCommand**: `cd frontend && npm run build`
 - **outputDirectory**: `frontend/dist`
 - **Rewrite**: `/api/(.*)` → `api/index.js`
+- **Function limits**: `api/index.js` runs with 256 MB memory, 30-second max duration
 
 ### Supabase tables
 

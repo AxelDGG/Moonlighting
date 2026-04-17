@@ -16,6 +16,8 @@ import serviciosRoutes       from './routes/servicios.js';
 import pagosRoutes           from './routes/pagos.js';
 import catalogoRoutes        from './routes/catalogo.js';
 import tecnicosRoutes        from './routes/tecnicos.js';
+import routeConfigsRoutes    from './routes/route_configs.js';
+import userProfilesRoutes    from './routes/user_profiles.js';
 
 export async function createApp() {
   if (!process.env.SUPABASE_URL)         throw new Error('Missing env: SUPABASE_URL');
@@ -50,6 +52,8 @@ export async function createApp() {
   await app.register(calendarRoutes,       { prefix: '/api/calendar' });
   await app.register(inventarioRoutes,        { prefix: '/api/inventario' });
   await app.register(almacenamientoRoutes,    { prefix: '/api/almacenamiento' });
+  await app.register(routeConfigsRoutes,      { prefix: '/api/route-configs' });
+  await app.register(userProfilesRoutes,      { prefix: '/api/user-profiles' });
 
   // Sanitized error handler — never leak internals
   app.setErrorHandler((error, request, reply) => {

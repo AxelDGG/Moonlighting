@@ -1,29 +1,33 @@
 import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
-import { state, cFromDb, pFromDb, smFromDb, aFromDb } from './state.js';
+import { state, cFromDb, pFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
 import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
 
 import { renderDash } from './modules/dashboard.js';
-import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, exportClientes } from './modules/clientes.js';
+import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, restoreCliente, exportClientes, toggleShowInactive } from './modules/clientes.js';
 import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
-         onTelaInput, onTelaKey, onTelaBlur, selectTela } from './modules/pedidos.js';
+         onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
-import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect, generateDayRoute, onRouteDayChange } from './modules/mapa.js';
+import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
+         generateDayRoute, onRouteDayChange, openRouteConfig, saveRouteConfig, closeRouteConfig, onRouteConfigChange,
+         viewRoute, deleteRoute, saveCurrentRoute, renderRoutesList } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
+import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile } from './modules/configuracion.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
-  dashboard: 'Dashboard',
-  clientes:  'Clientes',
-  pedidos:   'Pedidos',
-  almacen:   'Almacén',
-  cal:       'Calendario',
-  mapa:      'Mapa',
-  metricas:  'Métricas',
+  dashboard:      'Dashboard',
+  clientes:       'Clientes',
+  pedidos:        'Pedidos',
+  almacen:        'Almacén',
+  cal:            'Calendario',
+  mapa:           'Mapa',
+  metricas:       'Métricas',
+  configuracion:  'Configuración',
 };
 
 /* ── SHOW TAB ── */
@@ -36,17 +40,79 @@ function showTab(name) {
   if (nav) nav.classList.add('active');
   document.getElementById('ptitle').textContent = TAB_TITLES[name] || name;
 
-  if      (name === 'dashboard') renderDash();
-  else if (name === 'clientes')  renderClientes();
-  else if (name === 'pedidos')   renderPedidos();
-  else if (name === 'almacen')   renderAlmacenamiento();
-  else if (name === 'cal')       renderCal();
-  else if (name === 'mapa')      initMap();
-  else if (name === 'metricas')  renderMetricas();
+  if      (name === 'dashboard')     renderDash();
+  else if (name === 'clientes')      renderClientes();
+  else if (name === 'pedidos')       renderPedidos();
+  else if (name === 'almacen')       renderAlmacenamiento();
+  else if (name === 'cal')           renderCal();
+  else if (name === 'mapa')          initMap();
+  else if (name === 'metricas')      renderMetricas();
+  else if (name === 'configuracion') renderConfiguracion();
 
   // Close sidebar on mobile
   const sidebar = document.querySelector('.sidebar');
   if (sidebar?.classList.contains('open')) toggleSidebar();
+}
+
+/* ── APPLY ROLE RESTRICTIONS ── */
+function applyRoleRestrictions() {
+  const profile = state.userProfile;
+  if (!profile) return;
+
+  const admin = profile.role === 'admin';
+  const perms = profile.permissions || {};
+
+  const hide = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  };
+
+  // Dashboard: gestor sin permiso
+  if (!admin && perms.ver_dashboard === false) {
+    hide('nav-dashboard');
+  }
+
+  // Métricas: gestor sin permiso
+  if (!admin && perms.ver_metricas === false) {
+    hide('nav-metricas');
+  }
+
+  // Almacén: gestor sin permiso
+  if (!admin && perms.ver_almacen === false) {
+    hide('nav-almacen');
+  }
+
+  // Calendario: gestor sin permiso
+  if (!admin && perms.ver_calendario === false) {
+    hide('nav-cal');
+  }
+
+  // Mapa: gestor sin permiso
+  if (!admin && perms.ver_mapa === false) {
+    hide('nav-mapa');
+  }
+
+  // Configuración: solo admin
+  if (!admin) {
+    hide('nav-configuracion');
+  }
+
+  // Porcentajes de técnicos: ocultar columnas/sección
+  if (!admin && perms.ver_porcentajes === false) {
+    document.querySelectorAll('.tec-porcentaje').forEach(el => el.style.display = 'none');
+  }
+
+  // Botón crear técnico
+  if (!admin && perms.crear_tecnicos === false) {
+    document.querySelectorAll('.btn-crear-tecnico').forEach(el => el.style.display = 'none');
+  }
+
+  // Navegar al primer tab disponible
+  const firstAvail = admin ? 'dashboard'
+    : perms.ver_dashboard !== false ? 'dashboard'
+    : 'clientes';
+
+  showTab(firstAvail);
 }
 
 /* ── LOAD ALL DATA ── */
@@ -60,7 +126,6 @@ async function loadAll() {
     state.clientes = clientes.map(cFromDb);
     state.pedidos  = pedidos.map(pFromDb);
     setDbStatus(true);
-    renderDash();
     badge(state.pedidos.length + ' pedidos');
   } catch (err) {
     toast('Error cargando datos: ' + err.message, 'er');
@@ -83,6 +148,10 @@ async function loadAll() {
   try {
     state.tecnicos = await api.tecnicos.getAll();
   } catch { /* tabla tecnicos puede no existir */ }
+
+  try {
+    state.routeConfigs = await api.routeConfigs.getAll();
+  } catch { /* tabla route_configs puede no existir */ }
 }
 
 /* ── OUTLOOK SYNC ── */
@@ -113,14 +182,25 @@ async function doLogin(e) {
     const pass  = document.getElementById('l-pass').value;
     const user  = await login(email, pass);
     document.getElementById('user-email').textContent = user.email;
+    await loadUserProfile();
     showApp();
     await loadAll();
+    applyRoleRestrictions();
   } catch (err) {
     errEl.textContent = err.message || 'Credenciales incorrectas';
     errEl.style.display = 'block';
   } finally {
     btn.textContent = 'Entrar';
     btn.disabled = false;
+  }
+}
+
+async function loadUserProfile() {
+  try {
+    state.userProfile = await api.userProfiles.me();
+  } catch {
+    // Si falla, asumir admin para no bloquear
+    state.userProfile = { role: 'admin', permissions: {} };
   }
 }
 
@@ -146,9 +226,10 @@ async function init() {
   const user = await checkSession();
   if (user) {
     document.getElementById('user-email').textContent = user.email;
+    await loadUserProfile();
     showApp();
     await loadAll();
-    showTab('dashboard');
+    applyRoleRestrictions();
   } else {
     showLogin();
   }
@@ -164,9 +245,11 @@ window.openClienteModal = openClienteModal;
 window.submitCliente    = submitCliente;
 window.editPago         = editPago;
 window.savePago         = savePago;
-window.deleteCliente    = deleteCliente;
-window.exportClientes   = exportClientes;
-window.renderClientes   = renderClientes;
+window.deleteCliente       = deleteCliente;
+window.restoreCliente      = restoreCliente;
+window.exportClientes      = exportClientes;
+window.renderClientes      = renderClientes;
+window.toggleShowInactive  = toggleShowInactive;
 
 // Pedidos
 window.openPedidoModal  = openPedidoModal;
@@ -185,7 +268,8 @@ window.selectModelo     = selectModelo;
 window.onTelaInput      = onTelaInput;
 window.onTelaKey        = onTelaKey;
 window.onTelaBlur       = onTelaBlur;
-window.selectTela       = selectTela;
+window.selectTela            = selectTela;
+window.toggleShowCancelled   = toggleShowCancelled;
 
 // Calendar
 window.renderCal    = renderCal;
@@ -202,17 +286,25 @@ window.saveMotivo      = saveMotivo;
 window.cancelService   = cancelService;
 
 // Map
-window.toggleMuni      = toggleMuni;
-window.onMfInput       = onMfInput;
-window.onMfFocus       = onMfFocus;
-window.onMfBlur        = onMfBlur;
-window.onMfKey         = onMfKey;
-window.selectAcItem    = selectAcItem;
-window.toggleMapTipo   = toggleMapTipo;
-window.resetMapFilter  = resetMapFilter;
+window.toggleMuni        = toggleMuni;
+window.onMfInput         = onMfInput;
+window.onMfFocus         = onMfFocus;
+window.onMfBlur          = onMfBlur;
+window.onMfKey           = onMfKey;
+window.selectAcItem      = selectAcItem;
+window.toggleMapTipo     = toggleMapTipo;
+window.resetMapFilter    = resetMapFilter;
 window.onMfSelect        = onMfSelect;
 window.generateDayRoute  = generateDayRoute;
 window.onRouteDayChange  = onRouteDayChange;
+window.openRouteConfig   = openRouteConfig;
+window.saveRouteConfig   = saveRouteConfig;
+window.closeRouteConfig     = closeRouteConfig;
+window.onRouteConfigChange  = onRouteConfigChange;
+window.viewRoute         = viewRoute;
+window.deleteRoute       = deleteRoute;
+window.saveCurrentRoute  = saveCurrentRoute;
+window.renderRoutesList  = renderRoutesList;
 
 // Modals
 window.openOv  = openOv;
@@ -232,6 +324,12 @@ window.openTecnicosManager = openTecnicosManager;
 window.openTecnicoModal    = openTecnicoModal;
 window.submitTecnico       = submitTecnico;
 window.deleteTecnico       = deleteTecnico;
+
+// Configuración
+window.renderConfiguracion = renderConfiguracion;
+window.saveUserProfile     = saveUserProfile;
+window.addUserProfile      = addUserProfile;
+window.deleteUserProfile   = deleteUserProfile;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();

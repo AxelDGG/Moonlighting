@@ -7,6 +7,9 @@ import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { updateMapMarkers } from './mapa.js';
 
+let _showInactive = false;
+let _allLoaded = false; // true cuando ya se cargaron inactivos
+
 async function geocode(address) {
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`, { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } });
   const data = await res.json();
@@ -20,6 +23,24 @@ function normMuni(a) {
   raw = raw.replace(/^Municipio\s+(de\s+)?/i, '').trim();
   const known = ['Monterrey', 'San Pedro Garza García', 'Guadalupe', 'San Nicolás de los Garza', 'Apodaca', 'General Escobedo', 'Santa Catarina', 'García'];
   return known.find(k => k.toLowerCase() === raw.toLowerCase()) || known.find(k => raw.toLowerCase().includes(k.toLowerCase().split(' ')[0])) || raw;
+}
+
+export async function toggleShowInactive() {
+  _showInactive = !_showInactive;
+  const btn = document.getElementById('btn-toggle-inactive');
+  if (btn) {
+    btn.classList.toggle('on', _showInactive);
+    btn.title = _showInactive ? 'Ocultar eliminados' : 'Mostrar eliminados';
+  }
+  // Cargar inactivos del API solo la primera vez que se activa el toggle
+  if (_showInactive && !_allLoaded) {
+    try {
+      const all = await api.clientesAll.getAll();
+      state.clientes = all.map(cFromDb);
+      _allLoaded = true;
+    } catch (_) {}
+  }
+  renderClientes();
 }
 
 export function openClienteModal(id) {
@@ -47,7 +68,6 @@ export async function submitCliente(e) {
   const pago   = document.getElementById('c-p').value;
   const np     = document.getElementById('c-np').value.trim();
   const addressChanged = dir !== state.clientes[ci].direccion;
-  // Start with cleared coords when address changes — prevents stale pin on map
   let lat = addressChanged ? null : state.clientes[ci].lat;
   let lng = addressChanged ? null : state.clientes[ci].lng;
   let municipio = addressChanged ? 'Desconocido' : (state.clientes[ci].municipio || 'Desconocido');
@@ -61,7 +81,6 @@ export async function submitCliente(e) {
     state.clientes[ci] = updated;
     toast('Cliente actualizado');
     renderClientes(); renderDash(); closeOv('ov-cli');
-    // Refresh map markers so new pin position and municipio are reflected
     if (addressChanged) updateMapMarkers();
   } catch (err) { toast('Error: ' + err.message, 'er'); }
   btn.innerHTML = 'Guardar'; btn.disabled = false;
@@ -83,18 +102,24 @@ export async function savePago(id, val) {
   setTimeout(renderClientes, 150);
 }
 
+export async function restoreCliente(id) {
+  const ci = state.clientes.findIndex(x => x.id === id); if (ci === -1) return;
+  try {
+    await api.clientes.update(id, { activo: true });
+    state.clientes[ci] = { ...state.clientes[ci], activo: true };
+    toast('Cliente restaurado');
+    renderClientes(); renderDash();
+  } catch (err) { toast('Error: ' + err.message, 'er'); }
+}
+
 export async function deleteCliente(id) {
   const c = state.clientes.find(x => x.id === id);
-  const pedidosCli = state.pedidos.filter(p => +p.clienteId === id);
-  const msg = pedidosCli.length
-    ? `¿Eliminar a ${c?.nombre || 'este cliente'}?\nTiene ${pedidosCli.length} pedido(s) que quedarán sin cliente asignado.`
-    : `¿Eliminar a ${c?.nombre || 'este cliente'}?`;
-  if (!confirm(msg)) return;
+  if (!confirm(`¿Eliminar a ${c?.nombre || 'este cliente'}? Quedará inactivo y no aparecerá en la lista.`)) return;
   try {
     await api.clientes.delete(id);
-    state.clientes = state.clientes.filter(x => x.id !== id);
-    // Pedidos en estado local: desvinculamos el clienteId para mantener consistencia
-    state.pedidos = state.pedidos.map(p => +p.clienteId === id ? { ...p, clienteId: null } : p);
+    // Marcar como inactivo en estado local (soft delete)
+    const ci = state.clientes.findIndex(x => x.id === id);
+    if (ci !== -1) state.clientes[ci] = { ...state.clientes[ci], activo: false };
     renderClientes(); renderDash();
     toast('Cliente eliminado');
   } catch (err) { toast('Error: ' + err.message, 'er'); }
@@ -103,36 +128,55 @@ export async function deleteCliente(id) {
 export function renderClientes() {
   const q = (document.getElementById('qc')?.value || '').toLowerCase();
   const tbody = document.getElementById('tbc'), empty = document.getElementById('ec');
-  const list = state.clientes.filter(c => c.nombre.toLowerCase().includes(q) || String(c.id).includes(q) || c.numero.toLowerCase().includes(q) || c.direccion.toLowerCase().includes(q) || (c.municipio || '').toLowerCase().includes(q));
+
+  // Sincronizar botón de toggle
+  const btn = document.getElementById('btn-toggle-inactive');
+  if (btn) {
+    btn.classList.toggle('on', _showInactive);
+    btn.title = _showInactive ? 'Ocultar eliminados' : 'Mostrar eliminados';
+  }
+
+  let list = state.clientes.filter(c => {
+    if (!_showInactive && c.activo === false) return false;
+    return c.nombre.toLowerCase().includes(q) || String(c.id).includes(q)
+      || (c.numero || '').toLowerCase().includes(q)
+      || (c.direccion || '').toLowerCase().includes(q)
+      || (c.municipio || '').toLowerCase().includes(q);
+  });
+
   if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; refreshIcons(empty); return; }
   empty.style.display = 'none';
+
   tbody.innerHTML = list.map(c => {
     const col = muniColor(c.municipio);
-    return `<tr>
+    const inactive = c.activo === false;
+    return `<tr${inactive ? ' style="opacity:0.5"' : ''}>
       <td data-label="ID"><span class="pill pi">#${c.id}</span></td>
-      <td data-label="Nombre" class="bold">${esc(c.nombre)}</td>
+      <td data-label="Nombre" class="bold">${esc(c.nombre)}${inactive ? ' <span style="font-size:10px;color:var(--err);font-weight:400">(eliminado)</span>' : ''}</td>
       <td data-label="Teléfono" class="nw">${esc(c.numero || c.telefono || '—')}</td>
       <td data-label="Dirección"><span class="ell" title="${esc(c.direccion)}">${esc(c.direccion || '—')}</span></td>
       <td data-label="Municipio" class="nw"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span><span style="font-size:12px">${esc(c.municipio || '—')}</span></span></td>
-      <td data-label="Pago" id="pago-${c.id}" onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar">${pillPago(c.metodoPago)}</td>
+      <td data-label="Pago" id="pago-${c.id}" ${!inactive ? `onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar"` : ''}>${pillPago(c.metodoPago)}</td>
       <td data-label="Pedido">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
       <td class="nw">
-        <button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar">
-          <i data-lucide="pencil" style="width:12px;height:12px"></i>
-        </button>
-        <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar">
-          <i data-lucide="trash-2" style="width:12px;height:12px"></i>
-        </button>
+        ${inactive
+          ? `<button class="btn bg bsm" onclick="restoreCliente(${c.id})" title="Restaurar"><i data-lucide="rotate-ccw" style="width:12px;height:12px"></i></button>`
+          : `<button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar"><i data-lucide="pencil" style="width:12px;height:12px"></i></button>
+             <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`
+        }
       </td></tr>`;
   }).join('');
-  badge(state.clientes.length + ' clientes');
+
+  const activeCount = state.clientes.filter(c => c.activo !== false).length;
+  badge(activeCount + ' clientes');
   refreshIcons(tbody);
 }
 
 export function exportClientes() {
-  if (!state.clientes.length) return toast('No hay clientes para exportar', 'er');
+  const active = state.clientes.filter(c => c.activo !== false);
+  if (!active.length) return toast('No hay clientes para exportar', 'er');
   const headers = ['ID', 'Nombre', 'Teléfono', 'Dirección', 'Municipio', 'Método Pago', 'Pedido'];
-  const rows = state.clientes.map(c => [c.id, `"${c.nombre.replace(/"/g, '""')}"`, c.numero, `"${c.direccion.replace(/"/g, '""')}"`, c.municipio, c.metodoPago, c.numPedido || '']);
+  const rows = active.map(c => [c.id, `"${c.nombre.replace(/"/g, '""')}"`, c.numero, `"${c.direccion.replace(/"/g, '""')}"`, c.municipio, c.metodoPago, c.numPedido || '']);
   downloadCSV([headers.join(','), ...rows.map(r => r.join(','))].join('\n'), `clientes_moonlighting_${todayStr()}.csv`);
   toast('Listado de clientes exportado');
 }

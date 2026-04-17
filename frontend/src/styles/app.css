@@ -1417,3 +1417,17 @@ tbody tr {
 ═══════════════════════════════════════════════════════════════ */
 .track-dot svg { width: 14px; height: 14px; }
 
+
+
+/* ═══════════════════════════════════════════════════════════════
+   TOGGLE BUTTONS (mostrar eliminados / cancelados)
+═══════════════════════════════════════════════════════════════ */
+#btn-toggle-inactive.on,
+#btn-toggle-cancelled.on {
+  background: #fef3c7; color: #92400e; border-color: #f59e0b;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROUTE CONFIG MODAL — geocoding label
+═══════════════════════════════════════════════════════════════ */
+#ov-route-config small { display: block; margin-top: 3px; }

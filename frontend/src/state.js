@@ -1,5 +1,8 @@
 // Estado global de la aplicación
 export const state = {
+  // Usuario
+  userProfile: null, // { id, email, role: 'admin'|'gestor', permissions: {} }
+
   // Maestros
   clientes: [],
   catalogo: [],
@@ -18,10 +21,22 @@ export const state = {
   inventarioMovimientos: [],
   ubicacionesInventario: [],
 
+  // Rutas
+  routeConfigs: [],
+
   // Legacy (compatibilidad)
   servicios_metricas: [],
   almacenamiento: [],
 };
+
+// Helpers de permisos
+export function isAdmin() {
+  return state.userProfile?.role === 'admin';
+}
+export function canDo(permission) {
+  if (isAdmin()) return true;
+  return state.userProfile?.permissions?.[permission] !== false;
+}
 
 // ============= CLIENTES =============
 // Acepta tanto el esquema legacy (numero, direccion, metodo_pago, num_pedido)
@@ -30,6 +45,7 @@ export function cFromDb(r) {
   return {
     id:          r.id,
     nombre:      r.nombre,
+    activo:      r.activo !== false, // soft-delete flag
     // campos legacy — siguen en la tabla
     numero:      r.numero       || r.telefono || '',
     direccion:   r.direccion    || '',
