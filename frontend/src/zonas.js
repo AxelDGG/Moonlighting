@@ -157,3 +157,105 @@ export function parseGoogleMapsUrl(url) {
 
   return { lat, lng, cp, place, municipio };
 }
+
+/**
+ * Parsea una dirección en el formato que Google Maps entrega al "Copiar
+ * dirección":
+ *   "Pedregal de La Cascada 6769, Pedregal La Silla, 64898 Monterrey, N.L."
+ * Es decir: `Calle+Número, Colonia, CP Municipio, Estado`.
+ *
+ * Admite también variantes con más o menos comas; lo importante es que la
+ * parte "CP Municipio" aparezca en algún segmento (5 dígitos seguidos del
+ * nombre del municipio).
+ *
+ * @returns {{calle:?string,colonia:?string,codigoPostal:?string,municipio:?string,estado:?string,zona:?string}|null}
+ */
+export function parseAddress(address) {
+  if (!address || typeof address !== 'string') return null;
+  const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+
+  let calle = null, colonia = null, codigoPostal = null, municipio = null, estado = null;
+
+  // Buscar segmento con "CP Municipio" (ej. "64898 Monterrey")
+  let cpSegIdx = -1;
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^(\d{5})\s+(.+)$/);
+    if (m) {
+      codigoPostal = m[1];
+      municipio = _normalizeMunicipio(m[2].trim());
+      cpSegIdx = i;
+      break;
+    }
+  }
+  // Si no encontramos un segmento "CP Muni", intentar extraer CP suelto
+  if (!codigoPostal) {
+    for (const p of parts) {
+      const m = p.match(/\b(\d{5})\b/);
+      if (m) { codigoPostal = m[1]; break; }
+    }
+  }
+  // Municipio: si no lo encontramos con el CP, buscar uno conocido en cualquier segmento
+  if (!municipio) {
+    for (const p of parts) {
+      const m = _normalizeMunicipio(p);
+      if (ZONAS_POR_MUNICIPIO[m]) { municipio = m; break; }
+    }
+  }
+
+  // Calle = primer segmento
+  calle = parts[0] || null;
+  // Colonia = segundo segmento si es distinto del de CP
+  if (parts.length >= 3) {
+    colonia = parts[1] || null;
+    if (cpSegIdx === 1) colonia = null;
+  }
+  // Estado = último segmento si no es el de CP (típicamente "N.L." / "Nuevo León")
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    if (cpSegIdx !== parts.length - 1 && /^[A-Z.]{2,}$|^(Nuevo\s+Le[oó]n|NL)$/i.test(last)) {
+      estado = last;
+    }
+  }
+
+  const zona = codigoPostal && municipio ? zonaFromCP(municipio, codigoPostal) : null;
+  return { calle, colonia, codigoPostal, municipio, estado, zona };
+}
+
+// Mapea variantes comunes al nombre canónico usado en ZONAS_POR_MUNICIPIO
+function _normalizeMunicipio(raw) {
+  if (!raw) return raw;
+  const s = raw.replace(/\s+N\.?L\.?$/i, '').trim();
+  const aliases = {
+    'monterrey': 'Monterrey',
+    'mty': 'Monterrey',
+    'san pedro': 'San Pedro Garza García',
+    'san pedro garza garcia': 'San Pedro Garza García',
+    'san pedro garza garcía': 'San Pedro Garza García',
+    'guadalupe': 'Guadalupe',
+    'san nicolas': 'San Nicolás de los Garza',
+    'san nicolás': 'San Nicolás de los Garza',
+    'san nicolas de los garza': 'San Nicolás de los Garza',
+    'san nicolás de los garza': 'San Nicolás de los Garza',
+    'apodaca': 'Apodaca',
+    'escobedo': 'General Escobedo',
+    'general escobedo': 'General Escobedo',
+    'santa catarina': 'Santa Catarina',
+    'garcia': 'García',
+    'garcía': 'García',
+    'juarez': 'Juárez',
+    'juárez': 'Juárez',
+    'pesqueria': 'Pesquería',
+    'pesquería': 'Pesquería',
+    'cadereyta': 'Cadereyta Jiménez',
+    'cadereyta jimenez': 'Cadereyta Jiménez',
+    'cadereyta jiménez': 'Cadereyta Jiménez',
+  };
+  const key = s.toLowerCase();
+  if (aliases[key]) return aliases[key];
+  // Intento por prefijo
+  for (const [k, v] of Object.entries(aliases)) {
+    if (key.startsWith(k)) return v;
+  }
+  return s;
+}

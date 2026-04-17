@@ -460,10 +460,13 @@
               <div class="fg" style="margin-top:0">
                 <div class="fi"><label>Nombre *</label><input id="nc-n" type="text" placeholder="Juan Pérez"/></div>
                 <div class="fi"><label>Teléfono *</label><input id="nc-t" type="tel" placeholder="+52 81 …"/></div>
-                <div class="fi full"><label>Dirección *</label><input id="nc-d" type="text" placeholder="Av. Constitución 1500, MTY"/></div>
                 <div class="fi full">
-                  <label>URL de Google Maps * <span style="font-size:10px;font-weight:400;color:var(--mu)">(se extraen coordenadas y zona automáticamente)</span></label>
-                  <input id="nc-url" type="url" placeholder="https://www.google.com.mx/maps/place/.../@25.60,-100.26,17z/..." style="font-size:12px"/>
+                  <label>Dirección * <span style="font-size:10px;font-weight:400;color:var(--mu)">(pega desde Google Maps: Calle #, Colonia, CP Municipio, Estado)</span></label>
+                  <input id="nc-d" type="text" placeholder="Pedregal de La Cascada 6769, Pedregal La Silla, 64898 Monterrey, N.L."/>
+                </div>
+                <div class="fi full">
+                  <label>URL de Google Maps <span style="font-size:10px;font-weight:400;color:var(--mu)">(opcional — ubicación exacta; se envía al calendario de Outlook)</span></label>
+                  <input id="nc-url" type="url" placeholder="https://www.google.com.mx/maps/place/..." style="font-size:12px"/>
                 </div>
               </div>
             </div>

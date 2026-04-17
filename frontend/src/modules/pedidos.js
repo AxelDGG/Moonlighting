@@ -4,7 +4,7 @@ import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, 
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
-import { parseGoogleMapsUrl, zonaFromCP } from '../zonas.js';
+import { parseGoogleMapsUrl, parseAddress, zonaFromCP } from '../zonas.js';
 
 let cliMode = 'ex';
 let selectedModeloPrecio = 0;
@@ -33,7 +33,7 @@ export function setCliMode(m) {
   document.getElementById('cli-nw').style.display = m === 'nw' ? '' : 'none';
   document.getElementById('btn-ex').className = 'mode-btn' + (m === 'ex' ? ' on' : '');
   document.getElementById('btn-nw').className = 'mode-btn' + (m === 'nw' ? ' on' : '');
-  ['nc-n', 'nc-t', 'nc-d', 'nc-url'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
+  ['nc-n', 'nc-t', 'nc-d'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
 }
 
 // ── FORM VISIBILITY ──────────────────────────────────────────────────────────
@@ -322,38 +322,47 @@ export async function submitPedido(e) {
       const dir    = document.getElementById('nc-d').value.trim();
       const url    = document.getElementById('nc-url')?.value.trim() || '';
 
-      // Validar URL de Google Maps (obligatoria)
-      if (!url) {
-        alert('La URL de Google Maps es obligatoria para poder ubicar al cliente en el mapa.');
-        throw new Error('URL de Google Maps requerida');
+      // Parsear dirección en formato de Google Maps:
+      //   "Calle #, Colonia, CP Municipio, Estado"
+      const addr = parseAddress(dir);
+      if (!addr || !addr.codigoPostal || !addr.municipio) {
+        alert('La dirección no contiene código postal o municipio reconocibles.\n\nUsa el formato de Google Maps:\n  Calle #, Colonia, CP Municipio, Estado\n\nEjemplo: "Pedregal de La Cascada 6769, Pedregal La Silla, 64898 Monterrey, N.L."');
+        throw new Error('Dirección inválida');
       }
-      const parsed = parseGoogleMapsUrl(url);
-      if (!parsed) {
-        alert('La URL de Google Maps no es válida o no contiene coordenadas. Copia el link completo desde Google Maps (debe incluir @lat,lng en la URL).');
-        throw new Error('URL de Google Maps inválida');
+      const cp        = addr.codigoPostal;
+      const municipio = addr.municipio;
+      const zona      = addr.zona || zonaFromCP(municipio, cp);
+      if (!zona) {
+        alert(`No se pudo determinar la zona para ${municipio} con CP ${cp}. Verifica que el CP sea correcto.`);
+        throw new Error('Zona no determinable');
       }
 
-      let lat = parsed.lat, lng = parsed.lng;
-      let municipio = parsed.municipio || 'Desconocido';
-      const cp = parsed.cp || null;
-      // Si no detectamos municipio por la URL, intentar reverse geocode
-      if (!parsed.municipio) {
-        btn.innerHTML = '<span class="sp"></span> Detectando municipio…';
-        try { const g = await geocodeAddress(dir); if (g?.municipio) municipio = g.municipio; } catch (_) {}
+      // Coordenadas: preferir URL de Google Maps si se proporciona
+      let lat = null, lng = null;
+      if (url) {
+        const parsed = parseGoogleMapsUrl(url);
+        if (!parsed) {
+          alert('La URL de Google Maps no es válida o no contiene coordenadas (@lat,lng). Déjala vacía o copia el link completo desde Google Maps.');
+          throw new Error('URL de Google Maps inválida');
+        }
+        lat = parsed.lat; lng = parsed.lng;
+      } else {
+        // Sin URL: geocodificar la dirección como fallback
+        btn.innerHTML = '<span class="sp"></span> Geocodificando…';
+        try { const g = await geocodeAddress(dir); if (g) { lat = g.lat; lng = g.lng; } } catch (_) {}
       }
-      const zona = cp ? zonaFromCP(municipio, cp) : null;
 
       const row = await api.clientes.create({
         nombre, numero, direccion: dir, metodo_pago: pago, num_pedido: null,
         lat, lng, municipio,
-        google_maps_url: url,
+        google_maps_url: url || null,
         codigo_postal: cp,
         zona,
       });
       const nc = cFromDb(row);
       state.clientes.push(nc);
       clienteId = nc.id;
-      toast('Cliente creado: ' + nombre);
+      toast(`Cliente creado: ${nombre} · ${municipio} ${zona}`);
     } else {
       clienteId = document.getElementById('p-ce').value ? +document.getElementById('p-ce').value : null;
       if (clienteId) {

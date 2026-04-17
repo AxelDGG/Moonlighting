@@ -40,29 +40,58 @@ export default fp(async (fastify) => {
   function buildEventPayload(pedido, metrica, cliente) {
     const ICONS = { Abanico: '🪭', Persiana: '🪟', Levantamiento: '📐', Limpieza: '🧹', Mantenimiento: '🔧' };
     const ic     = ICONS[pedido.tipo_servicio] || '📋';
+    const tipo   = pedido.tipo_servicio || 'Servicio';
     const nombre = cliente?.nombre || 'Sin cliente';
+    const tel    = cliente?.numero || cliente?.telefono || '';
     const hora   = (metrica?.hora_programada || '08:00').slice(0, 5);
     const fin    = (metrica?.hora_fin || addOneHour(hora)).slice(0, 5);
-    const zona   = metrica?.zona || cliente?.municipio || '';
-    const dir    = cliente?.direccion ? `${zona} — ${cliente.direccion}` : zona;
+    const municipio = cliente?.municipio || '';
+    const zona   = cliente?.zona || metrica?.zona || '';
+    const zonaLabel = zona && municipio ? `${municipio} ${zona}` : (municipio || zona || '');
+    const direccion = cliente?.direccion || '';
+    const mapsUrl   = cliente?.google_maps_url || null;
+
+    // Detalles específicos por tipo de servicio
+    const det = pedido.detalles || {};
+    const detalleLineas = [];
+    if (tipo === 'Abanico') {
+      if (det.modelo)   detalleLineas.push(`<b>Modelo:</b> ${det.modelo}`);
+      if (det.nDesins)  detalleLineas.push(`<b>Desinstalar:</b> ${det.nDesins} ud`);
+    } else if (tipo === 'Persiana') {
+      if (det.tipoTela) detalleLineas.push(`<b>Tela:</b> ${det.tipoTela}`);
+      if (det.ancho && det.alto) detalleLineas.push(`<b>Medidas:</b> ${det.ancho} × ${det.alto} cm`);
+      if (det.instalacion) detalleLineas.push(`<b>Instalación:</b> ${det.instalacion}`);
+    } else if (tipo === 'Limpieza') {
+      if (det.modelo) detalleLineas.push(`<b>Modelo:</b> ${det.modelo}`);
+    }
+    if (det.notas)    detalleLineas.push(`<b>Notas:</b> ${det.notas}`);
+    if (det.traslado) detalleLineas.push(`<b>Traslado:</b> $${det.traslado}`);
 
     const bodyLines = [
-      `<b>Técnico:</b> ${metrica?.tecnico || 'Por asignar'}`,
-      `<b>Zona:</b> ${zona || '—'}`,
-      cliente?.numero ? `<b>Tel:</b> ${cliente.numero}` : '',
-      `<b>Total:</b> $${pedido.total}`,
+      `<b>Cliente:</b> ${nombre}`,
+      tel ? `<b>Teléfono:</b> <a href="tel:${tel}">${tel}</a>` : '',
+      direccion ? `<b>Dirección:</b> ${direccion}` : '',
+      zonaLabel ? `<b>Zona:</b> ${zonaLabel}` : '',
+      `<b>Tipo de servicio:</b> ${tipo}`,
       `<b>Cantidad:</b> ${pedido.cantidad}`,
-      pedido.detalles?.modelo   ? `<b>Modelo:</b> ${pedido.detalles.modelo}` : '',
-      pedido.detalles?.tipoTela ? `<b>Tela:</b> ${pedido.detalles.tipoTela}` : '',
-      pedido.detalles?.notas    ? `<b>Notas:</b> ${pedido.detalles.notas}`   : '',
+      ...detalleLineas,
+      `<b>Total a pagar:</b> $${pedido.total}`,
+      `<b>Técnico:</b> ${metrica?.tecnico || 'Por asignar'}`,
+      mapsUrl ? `<br><b>Ubicación exacta:</b> <a href="${mapsUrl}">Abrir en Google Maps</a>` : '',
     ].filter(Boolean).join('<br>');
 
+    // Location con coordenadas si están disponibles para mejor navegación
+    const location = { displayName: direccion || zonaLabel || 'Sin dirección' };
+    if (cliente?.lat && cliente?.lng) {
+      location.coordinates = { latitude: cliente.lat, longitude: cliente.lng };
+    }
+
     return {
-      subject: `${ic} ${pedido.tipo_servicio} – ${nombre}`,
+      subject: `${ic} ${tipo} – ${nombre}`,
       body:     { contentType: 'html', content: bodyLines },
       start:    { dateTime: `${pedido.fecha}T${hora}:00`, timeZone: 'America/Monterrey' },
       end:      { dateTime: `${pedido.fecha}T${fin}:00`,  timeZone: 'America/Monterrey' },
-      location: { displayName: dir },
+      location,
       isReminderOn:                true,
       reminderMinutesBeforeStart:  30,
     };
