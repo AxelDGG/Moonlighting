@@ -8,6 +8,7 @@ const tecnicoBodySchema = {
     porcentaje_instalacion: { type: ['number', 'null'], minimum: 0, maximum: 100 },
     porcentaje_mantenimiento: { type: ['number', 'null'], minimum: 0, maximum: 100 },
     notas:                 { type: ['string', 'null'] },
+    vehiculo:              { type: ['string', 'null'] },
   },
   additionalProperties: false,
 };

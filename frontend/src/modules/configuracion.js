@@ -49,9 +49,17 @@ export async function renderConfiguracion() {
           </div>
           <div>
             <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Rol</label>
-            <select id="cfg-new-role" style="padding:8px 12px;border:1px solid var(--bo);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none">
+            <select id="cfg-new-role" onchange="_cfgRoleChange(this,'cfg-new')" style="padding:8px 12px;border:1px solid var(--bo);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none">
               <option value="gestor">Gestor</option>
+              <option value="tecnico">Técnico</option>
               <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div id="cfg-new-tec-wrap" style="display:none">
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Técnico vinculado</label>
+            <select id="cfg-new-tecnico-id" style="width:100%;padding:8px 12px;border:1px solid var(--bo);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none">
+              <option value="">— Seleccionar técnico —</option>
+              ${(state.tecnicos || []).map(t => `<option value="${t.id}">${esc(t.nombre)}</option>`).join('')}
             </select>
           </div>
           <div style="display:flex;gap:8px">
@@ -90,22 +98,37 @@ function _renderProfiles() {
   body.innerHTML = _profiles.map(p => {
     const isCurrentUser = p.id === state.userProfile?.id;
     const perms = p.permissions || {};
+    const isTecnico = p.role === 'tecnico';
+    const tecLinked = isTecnico && p.tecnico_id
+      ? (state.tecnicos || []).find(t => t.id === p.tecnico_id)
+      : null;
+    const tecOptions = (state.tecnicos || []).map(t =>
+      `<option value="${t.id}" ${p.tecnico_id === t.id ? 'selected' : ''}>${esc(t.nombre)}</option>`
+    ).join('');
     return `
     <div style="border:1px solid var(--bo);border-radius:10px;padding:14px 16px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-weight:700;font-size:13.5px">${esc(p.email)}</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:2px">ID: ${p.id.slice(0,8)}…</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">ID: ${p.id.slice(0,8)}…${tecLinked ? ` · Técnico: ${esc(tecLinked.nombre)}` : ''}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <select id="role-${p.id}" class="cfg-role-sel" style="padding:5px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;background:var(--bg);color:var(--text);outline:none" ${isCurrentUser ? 'disabled' : ''}>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select id="role-${p.id}" class="cfg-role-sel" onchange="_cfgRoleChange(this,'${p.id}')" style="padding:5px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;background:var(--bg);color:var(--text);outline:none" ${isCurrentUser ? 'disabled' : ''}>
             <option value="gestor" ${p.role === 'gestor' ? 'selected' : ''}>Gestor</option>
+            <option value="tecnico" ${p.role === 'tecnico' ? 'selected' : ''}>Técnico</option>
             <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Admin</option>
           </select>
           ${!isCurrentUser ? `<button class="btn bp bsm" onclick="saveUserProfile('${p.id}')">Guardar</button>` : '<span style="font-size:11px;color:var(--mu)">(tú)</span>'}
         </div>
       </div>
-      ${p.role !== 'admin' ? `
+      ${isTecnico ? `
+      <div id="tec-wrap-${p.id}" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--mu);display:block;margin-bottom:4px">Técnico vinculado</label>
+        <select id="tecnico-id-${p.id}" style="padding:5px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;background:var(--bg);color:var(--text);outline:none">
+          <option value="">— Sin vincular —</option>${tecOptions}
+        </select>
+      </div>` : `<div id="tec-wrap-${p.id}" style="display:none"></div>`}
+      ${p.role !== 'admin' && !isTecnico ? `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
         ${Object.entries(PERM_LABELS).map(([key, label]) => {
           const checked = perms[key] !== false;
@@ -114,7 +137,7 @@ function _renderProfiles() {
             <span>${label}</span>
           </label>`;
         }).join('')}
-      </div>` : '<div style="font-size:11px;color:var(--mu);margin-top:2px">Admin — acceso completo</div>'}
+      </div>` : p.role === 'admin' ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">Admin — acceso completo</div>' : '<div style="font-size:11px;color:var(--mu)">Acceso solo a pedidos asignados y seguimiento.</div>'}
     </div>`;
   }).join('');
 
@@ -134,10 +157,16 @@ export async function saveUserProfile(userId) {
     if (el) permissions[key] = el.checked;
   });
 
+  const tecnicoIdEl = document.getElementById(`tecnico-id-${userId}`);
+  const tecnico_id = tecnicoIdEl?.value ? +tecnicoIdEl.value : null;
+
+  const payload = { role, permissions };
+  if (role === 'tecnico') payload.tecnico_id = tecnico_id;
+
   try {
-    await api.userProfiles.update(userId, { role, permissions });
+    await api.userProfiles.update(userId, payload);
     const idx = _profiles.findIndex(p => p.id === userId);
-    if (idx !== -1) _profiles[idx] = { ..._profiles[idx], role, permissions };
+    if (idx !== -1) _profiles[idx] = { ..._profiles[idx], role, permissions, tecnico_id: payload.tecnico_id ?? _profiles[idx].tecnico_id };
     toast('Permisos guardados');
     _renderProfiles();
   } catch (err) {
@@ -159,10 +188,17 @@ export async function addUserProfile(confirm = undefined) {
 
   const defaultPerms = role === 'gestor'
     ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
+    : role === 'tecnico'
+    ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
     : {};
 
+  const tecnicoIdEl = document.getElementById('cfg-new-tecnico-id');
+  const tecnico_id = role === 'tecnico' && tecnicoIdEl?.value ? +tecnicoIdEl.value : null;
+  const body = { email, role, permissions: defaultPerms };
+  if (tecnico_id) body.tecnico_id = tecnico_id;
+
   try {
-    const created = await api.userProfiles.create({ email, role, permissions: defaultPerms });
+    const created = await api.userProfiles.create(body);
     _profiles.push(created);
     _addMode = false;
     const panel = document.getElementById('cfg-add-panel');
@@ -173,6 +209,13 @@ export async function addUserProfile(confirm = undefined) {
     toast('Error: ' + err.message, 'er');
   }
 }
+
+// Expose to HTML (used by inline onchange)
+window._cfgRoleChange = function(sel, userId) {
+  const isTec = sel.value === 'tecnico';
+  const wrap = document.getElementById('tec-wrap-' + userId) || document.getElementById('cfg-new-tec-wrap');
+  if (wrap) wrap.style.display = isTec ? '' : 'none';
+};
 
 export function deleteUserProfile(userId) {
   // No implementamos borrado de perfil desde la UI — el admin puede reasignar roles

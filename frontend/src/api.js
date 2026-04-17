@@ -148,4 +148,11 @@ export const api = {
   clientesAll: {
     getAll: () => get('/clientes?include_inactive=true'),
   },
+
+  // ========== VEHÍCULOS ==========
+  vehiculos: {
+    getAll:  ()       => get('/vehiculos'),
+    create:  (data)   => post('/vehiculos', data),
+    delete:  (id)     => del(`/vehiculos/${id}`),
+  },
 };

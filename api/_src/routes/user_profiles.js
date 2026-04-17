@@ -11,7 +11,7 @@ const permissionsSchema = {
     ver_calendario:  { type: 'boolean' },
     ver_mapa:        { type: 'boolean' },
   },
-  additionalProperties: false,
+  additionalProperties: true,
 };
 
 export default async function userProfilesRoutes(fastify) {
@@ -30,6 +30,8 @@ export default async function userProfilesRoutes(fastify) {
       const role = userEmail === ADMIN_EMAIL ? 'admin' : 'gestor';
       const defaultPerms = role === 'gestor'
         ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
+        : role === 'tecnico'
+        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
         : {};
       const { data: created, error: createErr } = await fastify.supabase
         .from('user_profiles').insert({ id: userId, email: userEmail, role, permissions: defaultPerms })
@@ -61,8 +63,9 @@ export default async function userProfilesRoutes(fastify) {
       body: {
         type: 'object',
         properties: {
-          role:        { type: 'string', enum: ['admin', 'gestor'] },
+          role:        { type: 'string', enum: ['admin', 'gestor', 'tecnico'] },
           permissions: permissionsSchema,
+          tecnico_id:  { type: ['integer', 'null'] },
         },
         additionalProperties: false,
       },
@@ -105,13 +108,18 @@ export default async function userProfilesRoutes(fastify) {
     if (!targetUser) return reply.code(404).send({ error: 'Usuario no encontrado en auth. Debe crearse primero en Supabase.' });
 
     const role = req.body.role || 'gestor';
-    const permissions = req.body.permissions || (role === 'gestor'
-      ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
-      : {});
+    const permissions = req.body.permissions || (
+      role === 'gestor'
+        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
+        : role === 'tecnico'
+        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
+        : {});
 
+    const upsertData = { id: targetUser.id, email: req.body.email, role, permissions };
+    if (req.body.tecnico_id != null) upsertData.tecnico_id = req.body.tecnico_id;
     const { data, error } = await fastify.supabase
       .from('user_profiles')
-      .upsert({ id: targetUser.id, email: req.body.email, role, permissions })
+      .upsert(upsertData)
       .select().single();
     if (error) return reply.code(500).send({ error: 'Error al crear perfil', details: error.message });
     return reply.code(201).send(data);

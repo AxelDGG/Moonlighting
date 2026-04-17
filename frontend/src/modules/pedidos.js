@@ -422,9 +422,14 @@ export function renderPedidos() {
   }
 
   const isCancelled = p => (p.estado || '').toLowerCase() === 'cancelado';
+  const tecnicoFilter = state._tecnicoNombre || null;
 
   const list = state.pedidos.filter(p => {
     if (!_showCancelled && isCancelled(p)) return false;
+    if (tecnicoFilter) {
+      const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
+      if (!sm || sm.tecnico !== tecnicoFilter) return false;
+    }
     const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
     return String(p.id).includes(q) || (p.tipoServicio || '').toLowerCase().includes(q) ||
       (p.detalles?.modelo || '').toLowerCase().includes(q) ||

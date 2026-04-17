@@ -14,7 +14,7 @@ import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcI
          generateDayRoute, onRouteDayChange, openRouteConfig, saveRouteConfig, closeRouteConfig, onRouteConfigChange,
          viewRoute, deleteRoute, saveCurrentRoute, renderRoutesList } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
-import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen } from './modules/almacenamiento.js';
+import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
 import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile } from './modules/configuracion.js';
 
@@ -59,44 +59,46 @@ function applyRoleRestrictions() {
   const profile = state.userProfile;
   if (!profile) return;
 
-  const admin = profile.role === 'admin';
-  const perms = profile.permissions || {};
+  const admin    = profile.role === 'admin';
+  const isTec    = profile.role === 'tecnico';
+  const perms    = profile.permissions || {};
 
   const hide = (id) => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   };
 
-  // Dashboard: gestor sin permiso
-  if (!admin && perms.ver_dashboard === false) {
-    hide('nav-dashboard');
+  if (isTec) {
+    // Técnico: solo ve Pedidos
+    ['nav-dashboard', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas'].forEach(hide);
+    document.getElementById('nav-configuracion')?.style && (document.getElementById('nav-configuracion').style.display = 'none');
+    // Guardar nombre del técnico asignado para filtrar pedidos
+    const tec = profile.tecnico_id ? state.tecnicos.find(t => t.id === profile.tecnico_id) : null;
+    state._tecnicoNombre = tec?.nombre || null;
+    showTab('pedidos');
+    return;
   }
+
+  // Dashboard: gestor sin permiso
+  if (!admin && perms.ver_dashboard === false) hide('nav-dashboard');
 
   // Métricas: gestor sin permiso
-  if (!admin && perms.ver_metricas === false) {
-    hide('nav-metricas');
-  }
+  if (!admin && perms.ver_metricas === false) hide('nav-metricas');
 
   // Almacén: gestor sin permiso
-  if (!admin && perms.ver_almacen === false) {
-    hide('nav-almacen');
-  }
+  if (!admin && perms.ver_almacen === false) hide('nav-almacen');
 
   // Calendario: gestor sin permiso
-  if (!admin && perms.ver_calendario === false) {
-    hide('nav-cal');
-  }
+  if (!admin && perms.ver_calendario === false) hide('nav-cal');
 
   // Mapa: gestor sin permiso
-  if (!admin && perms.ver_mapa === false) {
-    hide('nav-mapa');
-  }
+  if (!admin && perms.ver_mapa === false) hide('nav-mapa');
 
-  // Configuración: solo admin — mostrar explícitamente (arranca con display:none en HTML)
+  // Configuración: solo admin
   const navCfg = document.getElementById('nav-configuracion');
   if (navCfg) navCfg.style.display = admin ? '' : 'none';
 
-  // Porcentajes de técnicos: ocultar columnas/sección
+  // Porcentajes de técnicos
   if (!admin && perms.ver_porcentajes === false) {
     document.querySelectorAll('.tec-porcentaje').forEach(el => el.style.display = 'none');
   }
@@ -106,7 +108,6 @@ function applyRoleRestrictions() {
     document.querySelectorAll('.btn-crear-tecnico').forEach(el => el.style.display = 'none');
   }
 
-  // Navegar al primer tab disponible
   const firstAvail = admin ? 'dashboard'
     : perms.ver_dashboard !== false ? 'dashboard'
     : 'clientes';
@@ -151,6 +152,10 @@ async function loadAll() {
   try {
     state.routeConfigs = await api.routeConfigs.getAll();
   } catch { /* tabla route_configs puede no existir */ }
+
+  try {
+    state.vehiculos = await api.vehiculos.getAll();
+  } catch { /* tabla vehiculos puede no existir */ }
 }
 
 /* ── OUTLOOK SYNC ── */
@@ -321,6 +326,9 @@ window.renderAlmacenamiento = renderAlmacenamiento;
 window.openAlmacenModal     = openAlmacenModal;
 window.submitAlmacen        = submitAlmacen;
 window.deleteAlmacen        = deleteAlmacen;
+window.openVehiculosManager = openVehiculosManager;
+window.submitVehiculo       = submitVehiculo;
+window.deleteVehiculo       = deleteVehiculo;
 
 // Técnicos
 window.openTecnicosManager = openTecnicosManager;

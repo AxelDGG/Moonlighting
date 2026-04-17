@@ -56,6 +56,15 @@ export function openTecnicoModal(id = null) {
   document.getElementById('t-eid').value = '';
   document.getElementById('mt-title').textContent = id ? 'Editar Técnico' : 'Nuevo Técnico';
   document.getElementById('t-activo').checked = true;
+
+  // Populate vehiculo select dynamically
+  const vehSel = document.getElementById('t-vehiculo');
+  if (vehSel) {
+    const vList = state.vehiculos || [];
+    vehSel.innerHTML = `<option value="">— Sin vehículo —</option>` +
+      vList.map(v => `<option value="${esc(v.nombre)}">${esc(v.nombre)}</option>`).join('');
+  }
+
   if (id !== null) {
     const t = (state.tecnicos || []).find(x => x.id === id);
     if (!t) return;
@@ -67,6 +76,7 @@ export function openTecnicoModal(id = null) {
     document.getElementById('t-pct-mant').value = t.porcentaje_mantenimiento ?? '';
     document.getElementById('t-notas').value    = t.notas || '';
     document.getElementById('t-activo').checked = t.activo !== false;
+    if (vehSel) vehSel.value = t.vehiculo || '';
   }
   openOv('ov-tecnico');
 }
@@ -84,6 +94,7 @@ export async function submitTecnico(e) {
   const pctM    = document.getElementById('t-pct-mant').value !== '' ? parseFloat(document.getElementById('t-pct-mant').value) : null;
   const notas   = document.getElementById('t-notas').value.trim() || null;
   const activo  = document.getElementById('t-activo').checked;
+  const vehiculo = document.getElementById('t-vehiculo')?.value || null;
   const body = {
     nombre,
     telefono:                tel,
@@ -92,6 +103,7 @@ export async function submitTecnico(e) {
     porcentaje_mantenimiento: pctM,
     notas,
     activo,
+    vehiculo: vehiculo || null,
   };
   try {
     if (eid) {

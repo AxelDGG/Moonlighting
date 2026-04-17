@@ -6,6 +6,41 @@ import { renderPedidos } from './pedidos.js';
 import { STATUS_COLORS } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 
+function _detectCategoria(tipoServicio) {
+  const ts = (tipoServicio || '').toLowerCase();
+  if (ts.includes('abanico') || ts.includes('fan')) return 'abanico';
+  if (ts.includes('persiana') || ts.includes('tela') || ts.includes('cortina') || ts.includes('screen')) return 'persiana';
+  return null;
+}
+
+async function _deductFromVehicle(sm, pedido) {
+  const tecnico = (state.tecnicos || []).find(t => t.nombre === sm.tecnico);
+  if (!tecnico?.vehiculo) return;
+
+  const vehiculo = tecnico.vehiculo;
+  const categoria = _detectCategoria(pedido.tipoServicio);
+  if (!categoria) return;
+
+  const matches = state.almacenamiento.filter(a => a.lugar === vehiculo && a.categoria === categoria);
+  if (!matches.length) {
+    toast(`Sin material de ${categoria} en ${vehiculo}`);
+    return;
+  }
+  if (matches.length > 1) {
+    toast(`Varios items de ${categoria} en ${vehiculo} — actualiza el inventario manualmente`);
+    return;
+  }
+
+  const entry = matches[0];
+  const newQty = Math.max(0, entry.cantidad - (pedido.cantidad || 1));
+  try {
+    await api.almacenamiento.update(entry.id, { modelo: entry.modelo, categoria: entry.categoria, lugar: entry.lugar, cantidad: newQty, precio: entry.precio });
+    const i = state.almacenamiento.findIndex(x => x.id === entry.id);
+    if (i !== -1) state.almacenamiento[i] = { ...state.almacenamiento[i], cantidad: newQty };
+    toast(`Inventario de ${vehiculo}: ${entry.modelo} ${entry.cantidad} → ${newQty}`);
+  } catch { /* silent */ }
+}
+
 export async function openTrackModal(pedidoId) {
   const p = state.pedidos.find(x => x.id === pedidoId); if (!p) return;
   const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
@@ -112,6 +147,8 @@ export async function trackAction(smId, key) {
     const c = p?.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
     if (updatedSM && p) renderTrackBody(updatedSM, p, c);
     toast('Registro guardado: ' + timeStr);
+    // Auto-deduct inventory from vehicle when service is completed
+    if (key === 'fin' && updatedSM && p) _deductFromVehicle(updatedSM, p);
     renderPedidos();
   } catch (err) { toast('Error: ' + err.message, 'er'); }
 }

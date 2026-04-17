@@ -2,8 +2,8 @@ const bodySchema = {
   type: 'object',
   properties: {
     modelo:    { type: 'string', minLength: 1 },
-    categoria: { type: 'string', enum: ['abanico', 'persiana'] },
-    lugar:     { type: 'string', enum: ['Bodega', 'Casa', 'Camioneta Nueva', 'Camioneta Vieja'] },
+    categoria: { type: 'string' },
+    lugar:     { type: 'string' },
     cantidad:  { type: 'integer', minimum: 0 },
     precio:    { type: 'number', minimum: 0 },
     notas:     { type: ['string', 'null'] },

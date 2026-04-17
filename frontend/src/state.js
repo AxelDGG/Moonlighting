@@ -24,6 +24,9 @@ export const state = {
   // Rutas
   routeConfigs: [],
 
+  // Vehículos / zonas de almacén
+  vehiculos: [],
+
   // Legacy (compatibilidad)
   servicios_metricas: [],
   almacenamiento: [],

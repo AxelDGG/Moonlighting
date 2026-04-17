@@ -184,9 +184,14 @@
         <div class="card">
           <div class="ch">
             <h2>Inventario / Almacenamiento</h2>
-            <button class="btn bp" onclick="openAlmacenModal()">
-              <i data-lucide="plus" style="width:14px;height:14px"></i> Nueva entrada
-            </button>
+            <div style="display:flex;gap:6px">
+              <button class="btn bg bsm" onclick="openVehiculosManager()" title="Gestionar vehículos/zonas">
+                <i data-lucide="truck" style="width:14px;height:14px"></i> Vehículos
+              </button>
+              <button class="btn bp" onclick="openAlmacenModal()">
+                <i data-lucide="plus" style="width:14px;height:14px"></i> Nueva entrada
+              </button>
+            </div>
           </div>
           <div class="cb">
             <div class="sr">
@@ -570,8 +575,6 @@
             <select id="a-lugar" required>
               <option value="Bodega">Bodega</option>
               <option value="Casa">Casa</option>
-              <option value="Camioneta Nueva">Camioneta Nueva</option>
-              <option value="Camioneta Vieja">Camioneta Vieja</option>
             </select>
           </div>
           <div class="fi"><label>Cantidad *</label><input id="a-qty" type="number" min="0" required value="0"/></div>
@@ -582,6 +585,20 @@
           <button type="button" class="btn bg" onclick="closeOv('ov-almacen')">Cancelar</button>
           <button type="submit" class="btn bp" id="btn-sa">Guardar</button>
         </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Gestionar Vehículos/Zonas -->
+<div class="ov" id="ov-vehiculos">
+  <div class="modal" style="width:420px">
+    <div class="mh"><h3><i data-lucide="truck" style="width:15px;height:15px;vertical-align:middle;margin-right:5px"></i>Vehículos / Zonas</h3><button class="mc" onclick="closeOv('ov-vehiculos')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mb">
+      <div id="veh-list" style="margin-bottom:16px"></div>
+      <form onsubmit="submitVehiculo(event)" style="display:flex;gap:8px">
+        <input id="veh-nombre" type="text" required placeholder="Ej: Camioneta 3, Bodega Norte…" style="flex:1;padding:8px 12px;border:1px solid var(--bo);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none"/>
+        <button type="submit" class="btn bp bsm"><i data-lucide="plus" style="width:13px;height:13px"></i> Agregar</button>
       </form>
     </div>
   </div>
@@ -628,6 +645,11 @@
           </div>
           <div class="fi"><label>Comisión instalación (%)</label><input id="t-pct-inst" type="number" min="0" max="100" step="0.5" placeholder="0–100"/></div>
           <div class="fi"><label>Comisión mantenimiento (%)</label><input id="t-pct-mant" type="number" min="0" max="100" step="0.5" placeholder="0–100"/></div>
+          <div class="fi"><label>Vehículo asignado</label>
+            <select id="t-vehiculo">
+              <option value="">— Sin vehículo —</option>
+            </select>
+          </div>
           <div class="fi full"><label>Notas</label><textarea id="t-notas" rows="2" placeholder="Observaciones opcionales…"></textarea></div>
           <div class="fi full" style="display:flex;align-items:center;gap:8px">
             <input id="t-activo" type="checkbox" checked style="width:auto;margin:0"/>
