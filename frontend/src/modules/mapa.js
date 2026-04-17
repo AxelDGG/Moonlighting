@@ -4,6 +4,7 @@ import { esc, muniColor, pillPago, tipoPill, statusPill, pedidoDetalle, money, t
 import { toast } from '../ui.js';
 import { MUNIS, TIPO_IC, TIPO_BG, TIPO_CO } from '../constants.js';
 import { refreshIcons } from '../icons.js';
+import { MUNICIPIOS_LIST, ZONAS_POR_MUNICIPIO, zonaFromCP, zonasDeMunicipio } from '../zonas.js';
 
 let map = null;
 let mapMarkers = [];
@@ -19,7 +20,22 @@ const MAX_PEDIDOS_AVISO = 6;
 const MAX_TRASLADO_AVISO = 120;
 
 let _mapFilterReady = false;
-let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set(), estado: '', zona: '', tecnico: '' };
+let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set(), estado: '', zona: '', subzona: '', tecnico: '' };
+
+// Colores por zona (distintos al color del municipio para distinguir)
+const ZONA_COLORS = {
+  'Norte':    '#0ea5e9',
+  'Sur':      '#f97316',
+  'Centro':   '#a855f7',
+  'Oriente':  '#10b981',
+  'Poniente': '#ef4444',
+};
+
+function clientZona(c) {
+  if (c.zona) return c.zona;
+  if (c.codigoPostal && c.municipio) return zonaFromCP(c.municipio, c.codigoPostal);
+  return null;
+}
 let _mfFocused = { nombre: -1, tel: -1, dir: -1 };
 
 // Config de ruta activa (persistida en Supabase)
@@ -213,22 +229,7 @@ export async function updateMapMarkers() {
     try { await api.clientes.update(c.id, { lat: c.lat, lng: c.lng, municipio: c.municipio }); } catch (_) {}
   }
 
-  activeMunis.forEach(muni => {
-    const cfg = MUNIS[muni];
-    if (!cfg) return;
-    const z = L.circle(cfg.center, {
-      radius: cfg.radius,
-      color: cfg.color,
-      weight: 2,
-      opacity: 0.5,
-      fillColor: cfg.color,
-      fillOpacity: 0.05,
-      dashArray: '9,5',
-      interactive: false
-    }).addTo(map);
-    z.bindTooltip(muni, { sticky: true, className: 'muni-tt' });
-    muniZones.push(z);
-  });
+  _drawZonePolygons(activeClientes, activeMunis);
 
   if (bounds.length === 1) map.setView(bounds[0], 14);
   else if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50] });
@@ -299,7 +300,8 @@ function initMapFilter() {
   }
   const zonaSelect = document.getElementById('mf-zona');
   if (zonaSelect && zonaSelect.options.length <= 1) {
-    Object.keys(MUNIS).forEach(muni => {
+    // Poblar con municipios de la tabla de zonas (fuente canónica)
+    MUNICIPIOS_LIST.forEach(muni => {
       const opt = document.createElement('option');
       opt.value = muni;
       opt.textContent = muni;
@@ -415,6 +417,10 @@ function clientPassFilter(c) {
   if (mapFilter.tel && !(c.numero || '').toLowerCase().includes(mapFilter.tel)) return false;
   if (mapFilter.dir && !(c.direccion || '').toLowerCase().includes(mapFilter.dir) && !(c.municipio || '').toLowerCase().includes(mapFilter.dir)) return false;
   if (mapFilter.zona && (c.municipio || '') !== mapFilter.zona) return false;
+  if (mapFilter.subzona) {
+    const z = clientZona(c);
+    if (z !== mapFilter.subzona) return false;
+  }
   if (mapFilter.tipos.size > 0) {
     const cp = state.pedidos.filter(p => +p.clienteId === c.id && !isCancelled(p));
     if (!cp.some(p => mapFilter.tipos.has(p.tipoServicio))) return false;
@@ -445,9 +451,33 @@ export function toggleMapTipo(tipo) {
 }
 
 export function onMfSelect(field) {
-  const idMap = { estado: 'mf-estado', zona: 'mf-zona', tecnico: 'mf-tecnico' };
+  const idMap = { estado: 'mf-estado', zona: 'mf-zona', subzona: 'mf-subzona', tecnico: 'mf-tecnico' };
   mapFilter[field] = document.getElementById(idMap[field])?.value || '';
+  if (field === 'zona') {
+    // Cascada: al cambiar municipio, repoblar la zona (subzona)
+    mapFilter.subzona = '';
+    _populateSubzonaSelect(mapFilter.zona);
+  }
   applyMapFilter();
+}
+
+function _populateSubzonaSelect(municipio) {
+  const wrap = document.getElementById('mf-subzona-wrap');
+  const sel  = document.getElementById('mf-subzona');
+  if (!sel || !wrap) return;
+  sel.innerHTML = '<option value="">Todas</option>';
+  const zonas = municipio ? zonasDeMunicipio(municipio) : [];
+  if (!zonas.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  zonas.forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = z;
+    sel.appendChild(opt);
+  });
+  wrap.style.display = '';
 }
 
 export function resetMapFilter() {
@@ -456,15 +486,20 @@ export function resetMapFilter() {
   document.getElementById('mf-dir').value = '';
   const estadoEl   = document.getElementById('mf-estado');
   const zonaEl     = document.getElementById('mf-zona');
+  const subzonaEl  = document.getElementById('mf-subzona');
+  const subzonaWrap = document.getElementById('mf-subzona-wrap');
   const tecnicoEl  = document.getElementById('mf-tecnico');
-  if (estadoEl)  estadoEl.value  = '';
-  if (zonaEl)    zonaEl.value    = '';
-  if (tecnicoEl) tecnicoEl.value = '';
+  if (estadoEl)    estadoEl.value    = '';
+  if (zonaEl)      zonaEl.value      = '';
+  if (subzonaEl)   subzonaEl.value   = '';
+  if (subzonaWrap) subzonaWrap.style.display = 'none';
+  if (tecnicoEl)   tecnicoEl.value   = '';
   mapFilter.nombre = '';
   mapFilter.tel = '';
   mapFilter.dir = '';
   mapFilter.estado = '';
   mapFilter.zona = '';
+  mapFilter.subzona = '';
   mapFilter.tecnico = '';
   mapFilter.tipos.clear();
   document.querySelectorAll('.mf-ac').forEach(d => d.classList.remove('open'));
@@ -473,7 +508,7 @@ export function resetMapFilter() {
 }
 
 function updateMapFilterUI() {
-  const active = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona || mapFilter.tecnico;
+  const active = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona || mapFilter.subzona || mapFilter.tecnico;
   document.getElementById('mf-reset')?.classList.toggle('show', active);
 }
 
@@ -482,7 +517,23 @@ function updateMapCount() {
   if (!el) return;
   const total = state.clientes.filter(c => c.activo !== false && c.lat && c.lng).length;
   const shown = mapMarkers.length;
-  const isFiltered = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona || mapFilter.tecnico;
+  const isFiltered = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona || mapFilter.subzona || mapFilter.tecnico;
+
+  // Si hay municipio seleccionado (pero aún no zona), mostrar desglose por zona
+  if (mapFilter.zona && !mapFilter.subzona) {
+    const breakdown = {};
+    state.clientes.filter(c => c.activo !== false && c.lat && c.lng && c.municipio === mapFilter.zona)
+      .forEach(c => {
+        const z = clientZona(c) || 'Sin zona';
+        breakdown[z] = (breakdown[z] || 0) + 1;
+      });
+    const parts = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
+      .map(([z, n]) => `<span style="color:${ZONA_COLORS[z] || '#64748b'}">${esc(z)} <b>${n}</b></span>`);
+    el.innerHTML = parts.length
+      ? `<b>${shown}</b> de ${total} · ${parts.join(' · ')}`
+      : `<b>${shown}</b> de ${total} clientes`;
+    return;
+  }
   el.innerHTML = isFiltered
     ? `<b>${shown}</b> de ${total} clientes`
     : `<b>${total}</b> cliente${total !== 1 ? 's' : ''}`;
@@ -846,3 +897,87 @@ function _clearRoutePolyline() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function _getVal(id) { return document.getElementById(id)?.value?.trim() || ''; }
 function _setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
+
+// ── Zone polygons (convex hull + expand) ──────────────────────────────────────
+// Construye polígonos con forma de envolvente convexa alrededor de los puntos
+// de cada (municipio, zona). Mucho más preciso que círculos y refleja la
+// distribución real de clientes.
+function _drawZonePolygons(activeClientes, activeMunis) {
+  // Agrupar puntos por (municipio, zona)
+  const groups = {}; // key "muni||zona" → { muni, zona, points:[[lat,lng]...] }
+  for (const c of activeClientes) {
+    const muni = c.municipio || 'Desconocido';
+    if (!activeMunis.has(muni)) continue;
+    if (!c.lat || !c.lng) continue;
+    const z = clientZona(c) || '—';
+    const key = muni + '||' + z;
+    if (!groups[key]) groups[key] = { muni, zona: z, points: [] };
+    groups[key].points.push([c.lat, c.lng]);
+  }
+
+  Object.values(groups).forEach(g => {
+    if (g.points.length < 1) return;
+    const color = ZONA_COLORS[g.zona] || muniColor(g.muni);
+    const label = g.zona === '—' ? g.muni : `${g.muni} — ${g.zona}`;
+
+    let layer;
+    if (g.points.length === 1) {
+      // Un único punto: círculo pequeño
+      layer = L.circle(g.points[0], {
+        radius: 350, color, weight: 2, opacity: 0.55,
+        fillColor: color, fillOpacity: 0.08, dashArray: '6,4', interactive: false,
+      });
+    } else if (g.points.length === 2) {
+      // Dos puntos: línea gruesa con buffer
+      layer = L.polyline(g.points, { color, weight: 4, opacity: 0.45, dashArray: '8,5', interactive: false });
+    } else {
+      // 3+ puntos: envolvente convexa expandida
+      const hull = _convexHull(g.points);
+      const expanded = _expandPolygon(hull, 0.003); // ~300m
+      layer = L.polygon(expanded, {
+        color, weight: 2, opacity: 0.6,
+        fillColor: color, fillOpacity: 0.08,
+        dashArray: '7,4', interactive: false, smoothFactor: 0.5,
+      });
+    }
+    layer.addTo(map);
+    layer.bindTooltip(label, { sticky: true, className: 'muni-tt' });
+    muniZones.push(layer);
+  });
+}
+
+// Andrew's monotone chain convex hull
+function _convexHull(points) {
+  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const n = pts.length;
+  if (n <= 2) return pts;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+// Expande un polígono alejando cada vértice del centroide una distancia dada
+// (en grados aprox). Más simple que un buffer geodésico exacto, suficiente
+// para delimitar visualmente una zona.
+function _expandPolygon(points, offsetDeg) {
+  if (!points.length) return points;
+  const cx = points.reduce((s, p) => s + p[0], 0) / points.length;
+  const cy = points.reduce((s, p) => s + p[1], 0) / points.length;
+  return points.map(([lat, lng]) => {
+    const dx = lat - cx, dy = lng - cy;
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-9) return [lat, lng];
+    return [lat + (dx / d) * offsetDeg, lng + (dy / d) * offsetDeg];
+  });
+}

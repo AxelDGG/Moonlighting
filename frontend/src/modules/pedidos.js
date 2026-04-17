@@ -4,6 +4,7 @@ import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, 
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
+import { parseGoogleMapsUrl, zonaFromCP } from '../zonas.js';
 
 let cliMode = 'ex';
 let selectedModeloPrecio = 0;
@@ -23,7 +24,7 @@ export function toggleShowCancelled() {
 }
 
 const COSTO_DESINS_UD      = 100; // $100 por abanico a desinstalar
-const COSTO_TRASLADO_DEFAULT = 200; // traslado fijo por defecto
+const COSTO_TRASLADO_DEFAULT = 0; // traslado fijo por defecto
 
 // ── CLIENT MODE ──────────────────────────────────────────────────────────────
 export function setCliMode(m) {
@@ -32,7 +33,7 @@ export function setCliMode(m) {
   document.getElementById('cli-nw').style.display = m === 'nw' ? '' : 'none';
   document.getElementById('btn-ex').className = 'mode-btn' + (m === 'ex' ? ' on' : '');
   document.getElementById('btn-nw').className = 'mode-btn' + (m === 'nw' ? ' on' : '');
-  ['nc-n', 'nc-t', 'nc-d'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
+  ['nc-n', 'nc-t', 'nc-d', 'nc-url'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
 }
 
 // ── FORM VISIBILITY ──────────────────────────────────────────────────────────
@@ -319,10 +320,36 @@ export async function submitPedido(e) {
       const nombre = document.getElementById('nc-n').value.trim();
       const numero = document.getElementById('nc-t').value.trim();
       const dir    = document.getElementById('nc-d').value.trim();
-      btn.innerHTML = '<span class="sp"></span> Geocodificando…';
-      let lat = null, lng = null, municipio = 'Desconocido';
-      try { const g = await geocodeAddress(dir); if (g) { lat = g.lat; lng = g.lng; municipio = g.municipio; } } catch (_) {}
-      const row = await api.clientes.create({ nombre, numero, direccion: dir, metodo_pago: pago, num_pedido: null, lat, lng, municipio });
+      const url    = document.getElementById('nc-url')?.value.trim() || '';
+
+      // Validar URL de Google Maps (obligatoria)
+      if (!url) {
+        alert('La URL de Google Maps es obligatoria para poder ubicar al cliente en el mapa.');
+        throw new Error('URL de Google Maps requerida');
+      }
+      const parsed = parseGoogleMapsUrl(url);
+      if (!parsed) {
+        alert('La URL de Google Maps no es válida o no contiene coordenadas. Copia el link completo desde Google Maps (debe incluir @lat,lng en la URL).');
+        throw new Error('URL de Google Maps inválida');
+      }
+
+      let lat = parsed.lat, lng = parsed.lng;
+      let municipio = parsed.municipio || 'Desconocido';
+      const cp = parsed.cp || null;
+      // Si no detectamos municipio por la URL, intentar reverse geocode
+      if (!parsed.municipio) {
+        btn.innerHTML = '<span class="sp"></span> Detectando municipio…';
+        try { const g = await geocodeAddress(dir); if (g?.municipio) municipio = g.municipio; } catch (_) {}
+      }
+      const zona = cp ? zonaFromCP(municipio, cp) : null;
+
+      const row = await api.clientes.create({
+        nombre, numero, direccion: dir, metodo_pago: pago, num_pedido: null,
+        lat, lng, municipio,
+        google_maps_url: url,
+        codigo_postal: cp,
+        zona,
+      });
       const nc = cFromDb(row);
       state.clientes.push(nc);
       clienteId = nc.id;

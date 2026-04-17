@@ -285,8 +285,14 @@
             </select>
           </div>
           <div class="mf-field">
-            <label><i data-lucide="map" style="width:12px;height:12px"></i> Zona</label>
+            <label><i data-lucide="map" style="width:12px;height:12px"></i> Municipio</label>
             <select id="mf-zona" onchange="onMfSelect('zona')">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="mf-field" id="mf-subzona-wrap" style="display:none">
+            <label><i data-lucide="compass" style="width:12px;height:12px"></i> Zona</label>
+            <select id="mf-subzona" onchange="onMfSelect('subzona')">
               <option value="">Todas</option>
             </select>
           </div>
@@ -455,6 +461,10 @@
                 <div class="fi"><label>Nombre *</label><input id="nc-n" type="text" placeholder="Juan Pérez"/></div>
                 <div class="fi"><label>Teléfono *</label><input id="nc-t" type="tel" placeholder="+52 81 …"/></div>
                 <div class="fi full"><label>Dirección *</label><input id="nc-d" type="text" placeholder="Av. Constitución 1500, MTY"/></div>
+                <div class="fi full">
+                  <label>URL de Google Maps * <span style="font-size:10px;font-weight:400;color:var(--mu)">(se extraen coordenadas y zona automáticamente)</span></label>
+                  <input id="nc-url" type="url" placeholder="https://www.google.com.mx/maps/place/.../@25.60,-100.26,17z/..." style="font-size:12px"/>
+                </div>
               </div>
             </div>
           </div>
@@ -511,7 +521,7 @@
 
           <!-- COMUNES -->
           <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required oninput="calcPedidoTotal()"/></div>
-          <div class="fi"><label>Traslado ($)</label><input id="p-traslado" type="number" min="0" step="1" value="200" oninput="calcPedidoTotal()" title="Costo fijo de traslado — se suma al total automáticamente"/></div>
+          <div class="fi"><label>Traslado ($)</label><input id="p-traslado" type="number" min="0" step="1" value="0" oninput="calcPedidoTotal()" title="Costo fijo de traslado — se suma al total automáticamente"/></div>
           <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required/></div>
           <div class="fi full"><label>Pago</label>
             <select id="p-pago">
