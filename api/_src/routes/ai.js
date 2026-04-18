@@ -1,4 +1,5 @@
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_TIMEOUT_MS = 20_000;
 
 /* ── CHAT TOOLS ── */
 const CHAT_TOOLS = [
@@ -6,19 +7,49 @@ const CHAT_TOOLS = [
     type: 'function',
     function: {
       name: 'query_inventory',
-      description: 'Consulta el inventario de productos (abanicos, persianas, refacciones) por ubicación o nombre. Úsalo cuando pregunten cuánto hay de algo o qué hay en un lugar.',
+      description: 'Consulta el inventario (tabla almacenamiento) filtrando por modelo, categoría y/o ubicación. Úsalo cuando pregunten "cuánto hay", "cuántos abanicos de X modelo", "qué hay en la camioneta", "qué hay en bodega", etc.',
       parameters: {
         type: 'object',
         properties: {
           nombre_item: {
             type: 'string',
-            description: 'Nombre o parte del nombre del producto a buscar (opcional)',
+            description: 'Nombre o parte del modelo del producto (ej. "F7239", "Ven 12", "long beach").',
           },
           nombre_ubicacion: {
             type: 'string',
-            description: 'Nombre o parte del nombre de la ubicación a filtrar (opcional)',
+            description: 'Nombre o parte del nombre de la ubicación (ej. "bodega", "casa", "camioneta nueva").',
+          },
+          categoria: {
+            type: 'string',
+            enum: ['abanico', 'persiana', 'refacciones'],
+            description: 'Filtrar por categoría.',
           },
         },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_inventory_summary',
+      description: 'Resumen de inventario con totales agrupados por ubicación y por categoría. Úsalo cuando pregunten "qué inventario tengo", "cuánto stock hay", "resumen de almacén".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_vehicle_inventory',
+      description: 'Lista el inventario cargado en un vehículo específico (camioneta). Úsalo cuando pregunten "qué hay en la camioneta X", "qué lleva [vehículo]".',
+      parameters: {
+        type: 'object',
+        properties: {
+          nombre_vehiculo: {
+            type: 'string',
+            description: 'Nombre o parte del nombre del vehículo (ej. "camioneta nueva", "van vieja").',
+          },
+        },
+        required: ['nombre_vehiculo'],
       },
     },
   },
@@ -89,18 +120,75 @@ async function executeTool(toolName, args, supabase) {
       .select('id, modelo, categoria, lugar, cantidad, precio')
       .gt('cantidad', 0);
 
-    if (args.nombre_item)      query = query.ilike('modelo', `%${args.nombre_item}%`);
-    if (args.nombre_ubicacion) query = query.ilike('lugar',  `%${args.nombre_ubicacion}%`);
+    if (args.nombre_item)      query = query.ilike('modelo',    `%${args.nombre_item}%`);
+    if (args.nombre_ubicacion) query = query.ilike('lugar',     `%${args.nombre_ubicacion}%`);
+    if (args.categoria)        query = query.eq('categoria',     args.categoria);
 
     const { data, error } = await query.order('lugar').order('modelo').limit(50);
-    if (error) return { error: 'No se pudo consultar el inventario' };
+    if (error) return { error: `No se pudo consultar el inventario: ${error.message}` };
 
     const rows = data || [];
     if (rows.length === 0) return { resultado: 'No hay productos en el inventario con esos criterios.' };
+
+    const totalUnidades = rows.reduce((s, r) => s + (r.cantidad || 0), 0);
     return {
-      total_items: rows.length,
+      total_registros: rows.length,
+      total_unidades: totalUnidades,
       inventario: rows.map(r =>
         `${r.modelo} (${r.categoria || 'sin categoría'}) en ${r.lugar}: ${r.cantidad} unid. — $${r.precio}/ud`
+      ),
+    };
+  }
+
+  if (toolName === 'query_inventory_summary') {
+    const { data, error } = await supabase
+      .from('almacenamiento')
+      .select('categoria, lugar, cantidad')
+      .gt('cantidad', 0);
+    if (error) return { error: `No se pudo consultar el inventario: ${error.message}` };
+    const rows = data || [];
+    if (rows.length === 0) return { resultado: 'No hay inventario registrado.' };
+
+    const porLugar = {};
+    const porCategoria = {};
+    let totalUnidades = 0;
+    for (const r of rows) {
+      const cant = r.cantidad || 0;
+      totalUnidades += cant;
+      const lugar = r.lugar || 'sin ubicación';
+      const cat   = r.categoria || 'sin categoría';
+      porLugar[lugar]       = (porLugar[lugar]       || 0) + cant;
+      porCategoria[cat]     = (porCategoria[cat]     || 0) + cant;
+    }
+    return {
+      total_registros: rows.length,
+      total_unidades: totalUnidades,
+      por_ubicacion: porLugar,
+      por_categoria: porCategoria,
+    };
+  }
+
+  if (toolName === 'query_vehicle_inventory') {
+    const nombre = (args.nombre_vehiculo || '').trim();
+    if (!nombre) return { error: 'Especifica el nombre del vehículo.' };
+    const { data, error } = await supabase
+      .from('almacenamiento')
+      .select('modelo, categoria, lugar, cantidad, precio')
+      .ilike('lugar', `%${nombre}%`)
+      .gt('cantidad', 0)
+      .order('categoria')
+      .order('modelo')
+      .limit(100);
+    if (error) return { error: `No se pudo consultar el vehículo: ${error.message}` };
+    const rows = data || [];
+    if (rows.length === 0) return { resultado: `No hay inventario registrado en "${nombre}".` };
+    const totalUnidades = rows.reduce((s, r) => s + (r.cantidad || 0), 0);
+    return {
+      vehiculo_buscado: nombre,
+      total_registros: rows.length,
+      total_unidades: totalUnidades,
+      inventario: rows.map(r =>
+        `${r.modelo} (${r.categoria || 'sin categoría'}) en ${r.lugar}: ${r.cantidad} unid.`
       ),
     };
   }
@@ -332,59 +420,94 @@ export default async function aiRoutes(fastify) {
       role: 'system',
       content: `Eres el asistente de Moonlighting, empresa de instalación de abanicos de techo y persianas en Monterrey, NL.
 Hoy es ${today} (${todayISO}).
-Respondes en español, de forma concisa y útil. Cuando el usuario pregunta sobre datos del negocio (inventario, pedidos, ventas) SIEMPRE usas las herramientas disponibles para consultar información real. No inventes datos ni des respuestas genéricas cuando hay una herramienta que puede resolver la pregunta.`,
+
+Reglas:
+- Responde en español, de forma concisa y útil.
+- Para saludos o preguntas conversacionales ("hola", "gracias", "qué día es"), responde directamente SIN llamar herramientas.
+- Para preguntas sobre datos del negocio (inventario, pedidos, ventas, vehículos), USA las herramientas disponibles para consultar datos reales. Nunca inventes números ni inventario.
+- Después de recibir el resultado de una herramienta, redacta una respuesta clara en lenguaje natural (no repitas el JSON literal, resume con totales y lista breve).
+- Si una herramienta regresa un error, díselo al usuario en una frase y sugiere intentar reformular la pregunta.
+- Cuando pregunten por un modelo específico de abanico o persiana, usa query_inventory con "nombre_item".
+- Cuando pregunten "qué hay en la camioneta X" o similar, usa query_vehicle_inventory.
+- Cuando pregunten el total del inventario o un resumen general, usa query_inventory_summary.`,
     };
 
     const messages = [systemMsg, ...req.body.messages];
 
     const callGroq = async (msgs) => {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          messages: msgs,
-          tools: CHAT_TOOLS,
-          tool_choice: 'auto',
-          temperature: 0.3,
-          max_tokens: 800,
-        }),
-      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), GROQ_TIMEOUT_MS);
+      let res;
+      try {
+        res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          signal: ctrl.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${groqApiKey}`,
+          },
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            messages: msgs,
+            tools: CHAT_TOOLS,
+            tool_choice: 'auto',
+            temperature: 0.3,
+            max_tokens: 800,
+          }),
+        });
+      } catch (err) {
+        if (err.name === 'AbortError') throw new Error('El modelo tardó demasiado en responder. Intenta de nuevo.');
+        throw new Error(`No se pudo contactar al modelo: ${err.message}`);
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || 'Error al contactar el modelo');
+        throw new Error(err.error?.message || `Error del modelo (HTTP ${res.status})`);
       }
       return res.json();
     };
 
-    let json = await callGroq(messages);
-    let choice = json.choices?.[0];
+    try {
+      let json = await callGroq(messages);
+      let choice = json.choices?.[0];
 
-    // Loop to handle multi-hop tool calls (max 4 rounds)
-    let maxIter = 4;
-    while (choice?.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0 && maxIter-- > 0) {
-      // Normalize content: null breaks some API parsers
-      messages.push({ ...choice.message, content: choice.message.content ?? '' });
-
-      for (const tc of choice.message.tool_calls) {
-        let toolArgs = {};
-        try { toolArgs = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore */ }
-        const toolResult = await executeTool(tc.function.name, toolArgs, fastify.supabase);
+      // Loop to handle multi-hop tool calls (max 4 rounds)
+      let maxIter = 4;
+      while (choice?.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0 && maxIter-- > 0) {
+        // Preserve only the fields the OpenAI-compatible API expects for assistant messages with tool_calls
         messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: JSON.stringify(toolResult),
+          role: 'assistant',
+          content: choice.message.content ?? '',
+          tool_calls: choice.message.tool_calls,
         });
+
+        for (const tc of choice.message.tool_calls) {
+          let toolArgs = {};
+          try { toolArgs = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore */ }
+          let toolResult;
+          try {
+            toolResult = await executeTool(tc.function.name, toolArgs, fastify.supabase);
+          } catch (err) {
+            fastify.log.error({ tool: tc.function.name, err }, 'tool execution failed');
+            toolResult = { error: `La herramienta falló: ${err.message}` };
+          }
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(toolResult),
+          });
+        }
+
+        json = await callGroq(messages);
+        choice = json.choices?.[0];
       }
 
-      json = await callGroq(messages);
-      choice = json.choices?.[0];
+      const text = choice?.message?.content?.trim() || 'No pude generar una respuesta. Intenta reformular la pregunta.';
+      return { text, model: GROQ_MODEL };
+    } catch (err) {
+      fastify.log.error({ err }, 'chat endpoint failure');
+      return reply.code(502).send({ error: err.message || 'Error al procesar la conversación' });
     }
-
-    const text = choice?.message?.content || 'No pude generar una respuesta. Intenta de nuevo.';
-    return { text, model: GROQ_MODEL };
   });
 }

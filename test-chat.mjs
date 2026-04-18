@@ -142,6 +142,37 @@ assert('orders uses gte/lt range (works for DATE and TIMESTAMP)', aiSrc.includes
 assert('orders_by_status resolves estado name to ID via estados_pedido table', aiSrc.includes("from('estados_pedido')"));
 
 /* ══════════════════════════════════════════════════════════════
+   TEST 5: new tools — summary + vehicle-specific + categoria filter
+══════════════════════════════════════════════════════════════ */
+console.log('\nTest 5 — expanded inventory tools');
+
+assert('query_inventory_summary tool declared', aiSrc.includes("name: 'query_inventory_summary'"));
+assert('query_vehicle_inventory tool declared', aiSrc.includes("name: 'query_vehicle_inventory'"));
+assert('query_inventory supports categoria filter (enum)', aiSrc.includes("['abanico', 'persiana', 'refacciones']"));
+assert('query_inventory handler filters by categoria', aiSrc.includes("query.eq('categoria',     args.categoria)") || aiSrc.includes("query.eq('categoria', args.categoria)"));
+assert('query_inventory_summary groups por_ubicacion/por_categoria', aiSrc.includes('por_ubicacion') && aiSrc.includes('por_categoria'));
+assert('query_vehicle_inventory filters by lugar ilike', aiSrc.includes(".ilike('lugar', `%${nombre}%`)"));
+
+/* ══════════════════════════════════════════════════════════════
+   TEST 6: error handling — timeout + 502 fallback
+══════════════════════════════════════════════════════════════ */
+console.log('\nTest 6 — robust error handling');
+
+assert('callGroq uses AbortController for timeout', aiSrc.includes('AbortController') && aiSrc.includes('GROQ_TIMEOUT_MS'));
+assert('chat route catches errors and returns 502 (never crashes into Vercel default 500)', aiSrc.includes('reply.code(502).send') && aiSrc.includes("fastify.log.error({ err }"));
+assert('assistant message pushed with explicit role/content/tool_calls (no extra fields leak)', aiSrc.includes("role: 'assistant',\n          content: choice.message.content ?? ''") || aiSrc.includes("role: 'assistant',"));
+assert('tool execution wrapped in try/catch', aiSrc.includes("try {\n            toolResult = await executeTool"));
+
+/* ══════════════════════════════════════════════════════════════
+   TEST 7: system prompt — friendly to greetings, strict about data
+══════════════════════════════════════════════════════════════ */
+console.log('\nTest 7 — system prompt behaviour');
+
+assert('prompt instructs NOT to call tools for greetings', aiSrc.toLowerCase().includes('saludos') && aiSrc.toLowerCase().includes('sin llamar herramientas'));
+assert('prompt instructs to use query_vehicle_inventory for vehicle questions', aiSrc.includes('query_vehicle_inventory'));
+assert('prompt instructs to summarise tool results in natural language', aiSrc.toLowerCase().includes('no repitas el json'));
+
+/* ══════════════════════════════════════════════════════════════
    RESULTS
 ══════════════════════════════════════════════════════════════ */
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
