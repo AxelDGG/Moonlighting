@@ -83,65 +83,48 @@ const CHAT_TOOLS = [
 
 async function executeTool(toolName, args, supabase) {
   if (toolName === 'query_inventory') {
+    // App uses 'almacenamiento' table (legacy system where data actually lives)
     let query = supabase
-      .from('inventario_existencias')
-      .select('cantidad, items_catalogo(nombre, sku), ubicaciones_inventario(nombre)')
+      .from('almacenamiento')
+      .select('id, modelo, categoria, lugar, cantidad, precio')
       .gt('cantidad', 0);
 
-    if (args.nombre_ubicacion) {
-      const { data: ubs } = await supabase
-        .from('ubicaciones_inventario')
-        .select('id, nombre')
-        .ilike('nombre', `%${args.nombre_ubicacion}%`);
-      if (ubs && ubs.length > 0) {
-        query = query.in('ubicacion_id', ubs.map(u => u.id));
-      }
-    }
+    if (args.nombre_item)      query = query.ilike('modelo', `%${args.nombre_item}%`);
+    if (args.nombre_ubicacion) query = query.ilike('lugar',  `%${args.nombre_ubicacion}%`);
 
-    const { data, error } = await query.order('cantidad', { ascending: false }).limit(30);
+    const { data, error } = await query.order('lugar').order('modelo').limit(50);
     if (error) return { error: 'No se pudo consultar el inventario' };
 
-    let rows = data || [];
-    if (args.nombre_item) {
-      const q = args.nombre_item.toLowerCase();
-      rows = rows.filter(r => r.items_catalogo?.nombre?.toLowerCase().includes(q));
-    }
-
-    if (rows.length === 0) return { resultado: 'No se encontraron productos con esos criterios.' };
+    const rows = data || [];
+    if (rows.length === 0) return { resultado: 'No hay productos en el inventario con esos criterios.' };
     return {
-      resultado: rows.map(r =>
-        `${r.items_catalogo?.nombre || '?'} (${r.items_catalogo?.sku || '-'}) en ${r.ubicaciones_inventario?.nombre || '?'}: ${r.cantidad} unidades`
+      total_items: rows.length,
+      inventario: rows.map(r =>
+        `${r.modelo} (${r.categoria || 'sin categoría'}) en ${r.lugar}: ${r.cantidad} unid. — $${r.precio}/ud`
       ),
     };
   }
 
   if (toolName === 'query_orders_today') {
-    const fecha = args.fecha || new Date().toISOString().slice(0, 10);
+    // Use the same view as the existing GET /pedidos endpoint
+    // fecha_servicio is a DATE column (YYYY-MM-DD), no timestamp suffix needed
+    const fecha = args.fecha || new Date().toLocaleDateString('sv', { timeZone: 'America/Monterrey' });
     const { data, error } = await supabase
-      .from('pedidos')
-      .select('id, folio, fecha_servicio, estados_pedido(nombre), clientes(nombre), total, notas_operativas')
-      .gte('fecha_servicio', `${fecha}T00:00:00`)
-      .lte('fecha_servicio', `${fecha}T23:59:59`)
+      .from('v_pedidos_resumen')
+      .select('*')
+      .eq('fecha_servicio', fecha)
       .order('fecha_servicio');
     if (error) return { error: 'No se pudieron consultar los pedidos' };
     if (!data || data.length === 0) return { resultado: `No hay pedidos con fecha de servicio el ${fecha}.` };
     return {
       fecha,
       total_pedidos: data.length,
-      pedidos: data.map(p => ({
-        id: p.id,
-        folio: p.folio,
-        cliente: p.clientes?.nombre || '?',
-        estado: p.estados_pedido?.nombre || '?',
-        total: p.total,
-        hora: p.fecha_servicio ? new Date(p.fecha_servicio).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Monterrey' }) : null,
-        notas: p.notas_operativas,
-      })),
+      pedidos: data.slice(0, 20),
     };
   }
 
   if (toolName === 'query_sales_today') {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('sv', { timeZone: 'America/Monterrey' });
     const desde = args.desde || today;
     const hasta = args.hasta || today;
     const { data, error } = await supabase
@@ -167,25 +150,24 @@ async function executeTool(toolName, args, supabase) {
 
   if (toolName === 'query_orders_by_status') {
     const limite = args.limite || 10;
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('id, folio, fecha_pedido, fecha_servicio, estados_pedido(nombre), clientes(nombre), total, saldo')
-      .eq('estado_id', args.estado)
+    // Resolve estado name → ID first, then filter the view
+    const { data: estados } = await supabase.from('estados_pedido').select('id, nombre');
+    const estadoMatch = (estados || []).find(e =>
+      e.nombre.toLowerCase().includes(args.estado.toLowerCase())
+    );
+    let query = supabase
+      .from('v_pedidos_resumen')
+      .select('*')
       .order('fecha_pedido', { ascending: false })
       .limit(limite);
+    if (estadoMatch) query = query.eq('estado_id', estadoMatch.id);
+    const { data, error } = await query;
     if (error) return { error: 'No se pudieron consultar los pedidos' };
     if (!data || data.length === 0) return { resultado: `No hay pedidos con estado "${args.estado}".` };
     return {
       estado: args.estado,
       total_encontrados: data.length,
-      pedidos: data.map(p => ({
-        id: p.id,
-        folio: p.folio,
-        cliente: p.clientes?.nombre || '?',
-        total: p.total,
-        saldo: p.saldo,
-        fecha_servicio: p.fecha_servicio ? p.fecha_servicio.slice(0, 10) : null,
-      })),
+      pedidos: data,
     };
   }
 

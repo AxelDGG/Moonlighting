@@ -118,6 +118,30 @@ function simulateLoop(mockChoices) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   TEST 3: inventory tool — queries almacenamiento, not inventario_existencias
+══════════════════════════════════════════════════════════════ */
+console.log('\nTest 3 — inventory tool uses almacenamiento table');
+
+import { readFileSync } from 'fs';
+const aiSrc = readFileSync(new URL('./api/_src/routes/ai.js', import.meta.url), 'utf8');
+
+assert('executeTool queries almacenamiento', aiSrc.includes("from('almacenamiento')"));
+assert('executeTool does NOT query inventario_existencias', !aiSrc.includes("from('inventario_existencias')"));
+assert('inventory filters by modelo (not items_catalogo)', aiSrc.includes("ilike('modelo'"));
+assert('inventory filters by lugar (not ubicaciones_inventario)', aiSrc.includes("ilike('lugar'"));
+
+/* ══════════════════════════════════════════════════════════════
+   TEST 4: orders tool — uses v_pedidos_resumen, no timestamp in date comparison
+══════════════════════════════════════════════════════════════ */
+console.log('\nTest 4 — orders tool uses view and correct date format');
+
+assert('orders uses v_pedidos_resumen view', aiSrc.includes("from('v_pedidos_resumen')"));
+assert('orders does NOT use nested select estados_pedido(nombre)', !aiSrc.includes("estados_pedido(nombre)"));
+assert('orders does NOT append T00:00:00 to fecha_servicio', !aiSrc.includes('fecha}T00:00:00'));
+assert('orders uses .eq for date (DATE column)', aiSrc.includes(".eq('fecha_servicio', fecha)"));
+assert('orders_by_status resolves estado name to ID via estados_pedido table', aiSrc.includes("from('estados_pedido')"));
+
+/* ══════════════════════════════════════════════════════════════
    RESULTS
 ══════════════════════════════════════════════════════════════ */
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
