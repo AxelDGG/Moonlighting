@@ -70,6 +70,9 @@
       <div class="ni-item" id="nav-configuracion" onclick="showTab('configuracion')" style="display:none">
         <span class="ic"><i data-lucide="settings"></i></span>Configuración
       </div>
+      <div class="ni-item" id="nav-tecnico" onclick="showTab('tecnico')" style="display:none">
+        <span class="ic"><i data-lucide="clipboard-list"></i></span>Mi agenda
+      </div>
     </nav>
     <div class="sf"><span class="sf-dot" id="db-dot"></span><span id="db-status">Conectando…</span></div>
     <div class="sf-logout">
@@ -368,6 +371,9 @@
 
       <!-- CONFIGURACIÓN (solo admin) -->
       <section class="tab" id="tab-configuracion"></section>
+
+      <!-- VISTA TÉCNICO (solo rol tecnico) -->
+      <section class="tab" id="tab-tecnico"></section>
 
       <!-- MÉTRICAS -->
       <section class="tab" id="tab-metricas">

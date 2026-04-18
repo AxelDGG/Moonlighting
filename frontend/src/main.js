@@ -17,7 +17,8 @@ import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcI
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
-import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile } from './modules/configuracion.js';
+import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile, cfgAddVehiculo, cfgDeleteVehiculo } from './modules/configuracion.js';
+import { renderTecnicoView } from './modules/tecnico_view.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
@@ -29,6 +30,7 @@ const TAB_TITLES = {
   mapa:           'Mapa',
   metricas:       'Métricas',
   configuracion:  'Configuración',
+  tecnico:        'Mi agenda',
 };
 
 /* ── SHOW TAB ── */
@@ -49,6 +51,7 @@ function showTab(name) {
   else if (name === 'mapa')          initMap();
   else if (name === 'metricas')      renderMetricas();
   else if (name === 'configuracion') renderConfiguracion();
+  else if (name === 'tecnico')       renderTecnicoView();
 
   // Close sidebar on mobile
   const sidebar = document.querySelector('.sidebar');
@@ -56,55 +59,67 @@ function showTab(name) {
 }
 
 /* ── APPLY ROLE RESTRICTIONS ── */
+// Preflight: se ejecuta ANTES de showApp() para evitar flash del UI completo
+// mientras loadAll() está corriendo. Oculta navs según rol+permisos y activa
+// la pestaña correcta en el DOM (sin disparar renders — eso lo hace
+// applyRoleRestrictions después de loadAll).
+function applyRolePreflight() {
+  const profile = state.userProfile;
+  if (!profile) return;
+  const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+  const show = (id) => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+  const activate = (name) => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ni-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + name)?.classList.add('active');
+    document.getElementById('nav-' + name)?.classList.add('active');
+    const ptitle = document.getElementById('ptitle');
+    if (ptitle) ptitle.textContent = TAB_TITLES[name] || name;
+  };
+
+  if (profile.role === 'tecnico') {
+    ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
+    show('nav-tecnico');
+    activate('tecnico');
+    return;
+  }
+
+  const admin = profile.role === 'admin';
+  const perms = profile.permissions || {};
+
+  if (!admin && perms.ver_dashboard  === false) hide('nav-dashboard');
+  if (!admin && perms.ver_metricas   === false) hide('nav-metricas');
+  if (!admin && perms.ver_almacen    === false) hide('nav-almacen');
+  if (!admin && perms.ver_calendario === false) hide('nav-cal');
+  if (!admin && perms.ver_mapa       === false) hide('nav-mapa');
+  if (admin) show('nav-configuracion'); else hide('nav-configuracion');
+
+  const firstAvail = admin ? 'dashboard'
+    : perms.ver_dashboard !== false ? 'dashboard'
+    : 'clientes';
+  activate(firstAvail);
+}
+
 function applyRoleRestrictions() {
   const profile = state.userProfile;
   if (!profile) return;
 
-  const admin    = profile.role === 'admin';
-  const isTec    = profile.role === 'tecnico';
-  const perms    = profile.permissions || {};
-
-  const hide = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  };
+  const admin = profile.role === 'admin';
+  const isTec = profile.role === 'tecnico';
+  const perms = profile.permissions || {};
 
   if (isTec) {
-    // Técnico: solo ve Pedidos
-    ['nav-dashboard', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas'].forEach(hide);
-    document.getElementById('nav-configuracion')?.style && (document.getElementById('nav-configuracion').style.display = 'none');
-    // Guardar nombre del técnico asignado para filtrar pedidos
+    // Nombre del técnico ya disponible porque loadAll pobló state.tecnicos
     const tec = profile.tecnico_id ? state.tecnicos.find(t => t.id === profile.tecnico_id) : null;
     state._tecnicoNombre = tec?.nombre || null;
-    showTab('pedidos');
+    showTab('tecnico');
     return;
   }
 
-  // Dashboard: gestor sin permiso
-  if (!admin && perms.ver_dashboard === false) hide('nav-dashboard');
-
-  // Métricas: gestor sin permiso
-  if (!admin && perms.ver_metricas === false) hide('nav-metricas');
-
-  // Almacén: gestor sin permiso
-  if (!admin && perms.ver_almacen === false) hide('nav-almacen');
-
-  // Calendario: gestor sin permiso
-  if (!admin && perms.ver_calendario === false) hide('nav-cal');
-
-  // Mapa: gestor sin permiso
-  if (!admin && perms.ver_mapa === false) hide('nav-mapa');
-
-  // Configuración: solo admin
-  const navCfg = document.getElementById('nav-configuracion');
-  if (navCfg) navCfg.style.display = admin ? '' : 'none';
-
-  // Porcentajes de técnicos
+  // Post-render: estos ocultamientos necesitan que el DOM ya tenga los elementos
   if (!admin && perms.ver_porcentajes === false) {
     document.querySelectorAll('.tec-porcentaje').forEach(el => el.style.display = 'none');
   }
-
-  // Botón crear técnico
   if (!admin && perms.crear_tecnicos === false) {
     document.querySelectorAll('.btn-crear-tecnico').forEach(el => el.style.display = 'none');
   }
@@ -112,7 +127,6 @@ function applyRoleRestrictions() {
   const firstAvail = admin ? 'dashboard'
     : perms.ver_dashboard !== false ? 'dashboard'
     : 'clientes';
-
   showTab(firstAvail);
 }
 
@@ -188,6 +202,7 @@ async function doLogin(e) {
     const user  = await login(email, pass);
     document.getElementById('user-email').textContent = user.email;
     await loadUserProfile();
+    applyRolePreflight();
     showApp();
     await loadAll();
     applyRoleRestrictions();
@@ -232,6 +247,7 @@ async function init() {
   if (user) {
     document.getElementById('user-email').textContent = user.email;
     await loadUserProfile();
+    applyRolePreflight();
     showApp();
     await loadAll();
     applyRoleRestrictions();
@@ -344,6 +360,11 @@ window.renderConfiguracion = renderConfiguracion;
 window.saveUserProfile     = saveUserProfile;
 window.addUserProfile      = addUserProfile;
 window.deleteUserProfile   = deleteUserProfile;
+window.cfgAddVehiculo      = cfgAddVehiculo;
+window.cfgDeleteVehiculo   = cfgDeleteVehiculo;
+
+// Vista técnico
+window.renderTecnicoView   = renderTecnicoView;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();
