@@ -1129,6 +1129,24 @@ code { font-family: 'Consolas', monospace; background: #f1f5f9; padding: 2px 5px
     z-index: 999;
   }
   #sidebar-overlay.show { display: block; }
+
+  /* ── CARD HEADERS ── */
+  .ch { flex-wrap: wrap; gap: 8px; }
+
+  /* ── ALMACÉN ── */
+  #tab-almacen .sr { flex-direction: column; }
+  #fa-cat { min-width: 0 !important; width: 100%; }
+
+  /* ── CALENDARIO ── */
+  #tab-cal .ch { justify-content: center; }
+  #cal-body { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 12px 0; }
+  .cal-week { min-width: 560px; padding: 0 12px; }
+
+  /* ── MAPA ── */
+  #map { height: 45vh; min-height: 240px; }
+  #muni-legend, #status-legend { display: none; }
+  .map-filter-bar { padding: 10px 12px; gap: 8px; }
+  .mf-field { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
 }
 
 /* ═══════════════════════════════════════════════════════════════
