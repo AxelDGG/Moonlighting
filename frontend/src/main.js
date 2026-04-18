@@ -18,6 +18,7 @@ import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
 import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile, cfgAddVehiculo, cfgDeleteVehiculo } from './modules/configuracion.js';
+import { renderTecnicoView } from './modules/tecnico_view.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
@@ -29,6 +30,7 @@ const TAB_TITLES = {
   mapa:           'Mapa',
   metricas:       'Métricas',
   configuracion:  'Configuración',
+  tecnico:        'Mi agenda',
 };
 
 /* ── SHOW TAB ── */
@@ -49,6 +51,7 @@ function showTab(name) {
   else if (name === 'mapa')          initMap();
   else if (name === 'metricas')      renderMetricas();
   else if (name === 'configuracion') renderConfiguracion();
+  else if (name === 'tecnico')       renderTecnicoView();
 
   // Close sidebar on mobile
   const sidebar = document.querySelector('.sidebar');
@@ -70,13 +73,14 @@ function applyRoleRestrictions() {
   };
 
   if (isTec) {
-    // Técnico: solo ve Pedidos
-    ['nav-dashboard', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas'].forEach(hide);
-    document.getElementById('nav-configuracion')?.style && (document.getElementById('nav-configuracion').style.display = 'none');
+    // Técnico: solo ve "Mi agenda" — oculta todo el resto del nav.
+    ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
+    const navTec = document.getElementById('nav-tecnico');
+    if (navTec) navTec.style.display = '';
     // Guardar nombre del técnico asignado para filtrar pedidos
     const tec = profile.tecnico_id ? state.tecnicos.find(t => t.id === profile.tecnico_id) : null;
     state._tecnicoNombre = tec?.nombre || null;
-    showTab('pedidos');
+    showTab('tecnico');
     return;
   }
 
@@ -346,6 +350,9 @@ window.addUserProfile      = addUserProfile;
 window.deleteUserProfile   = deleteUserProfile;
 window.cfgAddVehiculo      = cfgAddVehiculo;
 window.cfgDeleteVehiculo   = cfgDeleteVehiculo;
+
+// Vista técnico
+window.renderTecnicoView   = renderTecnicoView;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();
