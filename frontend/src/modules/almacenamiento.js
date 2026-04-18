@@ -1,7 +1,7 @@
 import { state, aFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort } from '../utils.js';
-import { toast, openOv, closeOv } from '../ui.js';
+import { toast, openOv, closeOv, initMobileRows } from '../ui.js';
 import { refreshIcons } from '../icons.js';
 
 const FIXED_ZONAS = ['Bodega', 'Casa'];
@@ -52,15 +52,15 @@ export function renderAlmacenamiento() {
       const unidad  = a.categoria === 'persiana' ? '/m²' : '/ud';
       const dateStr = a.updatedAt ? fdateShort(a.updatedAt.substring(0, 10)) : '—';
       return `<tr>
-        <td><span class="pill pi">#${a.id}</span></td>
-        <td><span class="bold">${esc(a.modelo)}</span></td>
-        <td>${catPill}</td>
-        <td style="display:flex;align-items:center;gap:5px">${lugarIc} ${esc(a.lugar || '—')}</td>
-        <td class="tr" style="${stockCl}">${a.cantidad}</td>
-        <td class="nw">${money(a.precio)}<span style="font-size:10px;color:var(--mu)">${unidad}</span></td>
-        <td style="font-size:11px;color:var(--mu);max-width:180px">${a.notas ? esc(a.notas) : '<span class="mu">—</span>'}</td>
-        <td style="font-size:11px;color:var(--mu)" class="nw">${dateStr}</td>
-        <td class="nw">
+        <td data-label="ID" class="mob-det"><span class="pill pi">#${a.id}</span></td>
+        <td data-label="Modelo"><span class="bold">${esc(a.modelo)}</span></td>
+        <td data-label="Tipo">${catPill}</td>
+        <td data-label="Lugar" class="mob-det" style="display:flex;align-items:center;gap:5px">${lugarIc} ${esc(a.lugar || '—')}</td>
+        <td data-label="Cant." class="tr" style="${stockCl}">${a.cantidad}</td>
+        <td data-label="Precio" class="nw mob-det">${money(a.precio)}<span style="font-size:10px;color:var(--mu)">${unidad}</span></td>
+        <td data-label="Notas" class="mob-det" style="font-size:11px;color:var(--mu);max-width:180px">${a.notas ? esc(a.notas) : '<span class="mu">—</span>'}</td>
+        <td data-label="Actualizado" class="mob-det nw" style="font-size:11px;color:var(--mu)">${dateStr}</td>
+        <td class="td-act nw">
           <button class="btn bw bsm" onclick="openAlmacenModal(${a.id})" title="Editar">
             <i data-lucide="pencil" style="width:12px;height:12px"></i>
           </button>
@@ -72,6 +72,7 @@ export function renderAlmacenamiento() {
     }).join('');
 
   refreshIcons(tbody);
+  initMobileRows(tbody);
 }
 
 export function openAlmacenModal(id = null) {

@@ -32,6 +32,22 @@ export function toggleSidebar() {
   document.getElementById('sidebar-overlay')?.classList.toggle('show');
 }
 
+export function initMobileRows(tbody) {
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (!tr.querySelector('.mob-det')) return;
+    const td = document.createElement('td');
+    td.className = 'mob-exp';
+    td.textContent = 'Ver detalles ▼';
+    tr.appendChild(td);
+    tr.addEventListener('click', e => {
+      if (e.target.closest('button, a, input, select')) return;
+      const expanded = tr.classList.toggle('expanded');
+      td.textContent = expanded ? 'Ver menos ▲' : 'Ver detalles ▼';
+    });
+  });
+}
+
 export function initOverlayListeners() {
   document.querySelectorAll('.ov').forEach(o =>
     o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); })

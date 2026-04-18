@@ -1,7 +1,7 @@
 import { state, cFromDb, cToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, muniColor, pillPago, todayStr, downloadCSV } from '../utils.js';
-import { toast, openOv, closeOv, badge } from '../ui.js';
+import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
@@ -156,14 +156,14 @@ export function renderClientes() {
     const col = muniColor(c.municipio);
     const inactive = c.activo === false;
     return `<tr${inactive ? ' style="opacity:0.5"' : ''}>
-      <td data-label="ID"><span class="pill pi">#${c.id}</span></td>
+      <td data-label="ID" class="mob-det"><span class="pill pi">#${c.id}</span></td>
       <td data-label="Nombre" class="bold">${esc(c.nombre)}${inactive ? ' <span style="font-size:10px;color:var(--err);font-weight:400">(eliminado)</span>' : ''}</td>
-      <td data-label="Teléfono" class="nw">${esc(c.numero || c.telefono || '—')}</td>
-      <td data-label="Dirección"><span class="ell" title="${esc(c.direccion)}">${esc(c.direccion || '—')}</span></td>
+      <td data-label="Teléfono" class="nw mob-det">${esc(c.numero || c.telefono || '—')}</td>
+      <td data-label="Dirección" class="mob-det"><span class="ell" title="${esc(c.direccion)}">${esc(c.direccion || '—')}</span></td>
       <td data-label="Municipio" class="nw"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span><span style="font-size:12px">${esc(c.municipio || '—')}</span></span></td>
-      <td data-label="Pago" id="pago-${c.id}" ${!inactive ? `onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar"` : ''}>${pillPago(c.metodoPago)}</td>
-      <td data-label="Pedido">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
-      <td class="nw">
+      <td data-label="Pago" class="mob-det" id="pago-${c.id}" ${!inactive ? `onclick="editPago(${c.id})" style="cursor:pointer" title="Click para cambiar"` : ''}>${pillPago(c.metodoPago)}</td>
+      <td data-label="Pedido" class="mob-det">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
+      <td class="td-act nw">
         ${inactive
           ? `<button class="btn bg bsm" onclick="restoreCliente(${c.id})" title="Restaurar"><i data-lucide="rotate-ccw" style="width:12px;height:12px"></i></button>`
           : `<button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar"><i data-lucide="pencil" style="width:12px;height:12px"></i></button>
@@ -175,6 +175,7 @@ export function renderClientes() {
   const activeCount = state.clientes.filter(c => c.activo !== false).length;
   badge(activeCount + ' clientes');
   refreshIcons(tbody);
+  initMobileRows(tbody);
 }
 
 export function exportClientes() {

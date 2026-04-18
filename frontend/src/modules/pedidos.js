@@ -1,7 +1,7 @@
 import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
-import { toast, openOv, closeOv, badge } from '../ui.js';
+import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
 import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
@@ -736,15 +736,15 @@ export function renderPedidos() {
     const sm      = state.servicios_metricas.find(s => s.pedido_id === p.id);
     const cancelled = isCancelled(p);
     return `<tr${cancelled ? ' style="opacity:0.5"' : ''}>
-      <td data-label="ID"><span class="pill pi">#${p.id}</span></td>
-      <td data-label="Fecha" class="nw">${fdateShort(p.fecha)}</td>
+      <td data-label="ID" class="mob-det"><span class="pill pi">#${p.id}</span></td>
+      <td data-label="Fecha" class="nw mob-det">${fdateShort(p.fecha)}</td>
       <td data-label="Cliente">${c ? `<span class="bold">${esc(c.nombre)}</span>` : '<span class="mu">Sin cliente</span>'}</td>
       <td data-label="Servicio">${tipoPill(p.tipoServicio)}</td>
-      <td data-label="Detalle">${pedidoDetalle(p)}</td>
-      <td data-label="Cant." class="tr">${p.cantidad}</td>
+      <td data-label="Detalle" class="mob-det">${pedidoDetalle(p)}</td>
+      <td data-label="Cant." class="tr mob-det">${p.cantidad}</td>
       <td data-label="Total" class="bold grn nw">${money(p.total)}</td>
       <td data-label="Estado">${cancelled ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-weight:600">Cancelado</span>' : sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
-      <td class="nw">
+      <td class="td-act nw">
         ${!cancelled ? `
         <button class="btn bsm" style="background:#dbeafe;color:#1d4ed8" onclick="openTrackModal(${p.id})" title="Seguimiento">
           <i data-lucide="map-pin" style="width:12px;height:12px"></i>
@@ -761,6 +761,7 @@ export function renderPedidos() {
   const activeCount = state.pedidos.filter(p => !isCancelled(p)).length;
   badge(activeCount + ' pedidos');
   refreshIcons(tbody);
+  initMobileRows(tbody);
 }
 
 export function exportPedidos() {
