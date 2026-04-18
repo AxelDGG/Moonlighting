@@ -7,7 +7,8 @@ import { renderDash } from './modules/dashboard.js';
 import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, restoreCliente, exportClientes, toggleShowInactive } from './modules/clientes.js';
 import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
-         onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled } from './modules/pedidos.js';
+         onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled,
+         triggerNcGeoPreview, onNcUrlInput } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
@@ -262,7 +263,9 @@ window.deletePedido     = deletePedido;
 window.exportPedidos    = exportPedidos;
 window.updatePF         = updatePF;
 window.calcExtra        = calcExtra;
-window.setCliMode       = setCliMode;
+window.setCliMode           = setCliMode;
+window.triggerNcGeoPreview  = triggerNcGeoPreview;
+window.onNcUrlInput         = onNcUrlInput;
 window.renderPedidos    = renderPedidos;
 window.calcPedidoTotal  = calcPedidoTotal;
 window.onModeloInput    = onModeloInput;

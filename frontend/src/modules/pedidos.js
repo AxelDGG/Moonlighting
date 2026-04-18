@@ -14,6 +14,99 @@ let modeloAcIdx = -1;
 let telaAcIdx   = -1;
 let _showCancelled = false;
 
+// ── Geocoding preview para nuevo cliente ─────────────────────────────────────
+let _previewDebounce = null;
+let _lastPreviewKey  = '';
+// Resultado geocodificado listo para usar en submit (evita doble llamada)
+let _ncGeoResult     = null;
+
+export function triggerNcGeoPreview() {
+  const calle    = document.getElementById('nc-calle')?.value.trim();
+  const municipio = document.getElementById('nc-muni')?.value;
+  const cp       = document.getElementById('nc-cp')?.value.trim();
+  if (!calle || !municipio || !/^\d{5}$/.test(cp)) return;
+
+  const key = `${calle}|${municipio}|${cp}`;
+  if (key === _lastPreviewKey) return;
+
+  clearTimeout(_previewDebounce);
+  _previewDebounce = setTimeout(() => _runGeoPreview(calle, municipio, cp, key), 400);
+}
+
+export function onNcUrlInput() {
+  // Si el usuario pega una URL, limpiar el preview de texto — la URL toma precedencia
+  const url = document.getElementById('nc-url')?.value.trim();
+  if (url) {
+    _ncGeoResult = null;
+    _lastPreviewKey = '';
+    _setGeoPreview('url', null);
+  }
+}
+
+async function _runGeoPreview(calle, municipio, cp, key) {
+  _lastPreviewKey = key;
+  _ncGeoResult    = null;
+  _setGeoPreview('loading', null);
+  try {
+    const g = await api.geocode.search({
+      structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
+    });
+    if (_lastPreviewKey !== key) return; // llegó una nueva búsqueda mientras esperábamos
+    if (!g || g.lat == null) {
+      _setGeoPreview('miss', null);
+      return;
+    }
+    // Validar que el CP del resultado coincida con el ingresado
+    const cpMatch = !g.codigoPostal || g.codigoPostal === cp || g.codigoPostal.slice(0,3) === cp.slice(0,3);
+    const quality = cpMatch && g.confidence === 'high' ? 'ok'
+      : cpMatch ? 'warn'
+      : 'bad';
+    _ncGeoResult = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false, cpMatch };
+    _setGeoPreview(quality, g);
+  } catch (_) {
+    if (_lastPreviewKey !== key) return;
+    _setGeoPreview('miss', null);
+  }
+}
+
+function _setGeoPreview(state, g) {
+  const el = document.getElementById('nc-geo-preview');
+  if (!el) return;
+  const STYLES = {
+    loading: { bg: '#f1f5f9', fg: '#64748b', icon: 'loader-2', spin: true  },
+    ok:      { bg: '#dcfce7', fg: '#166534', icon: 'check-circle-2', spin: false },
+    warn:    { bg: '#fef3c7', fg: '#92400e', icon: 'alert-triangle',  spin: false },
+    bad:     { bg: '#fee2e2', fg: '#991b1b', icon: 'alert-triangle',  spin: false },
+    miss:    { bg: '#fee2e2', fg: '#991b1b', icon: 'x-circle',        spin: false },
+    url:     { bg: '#dbeafe', fg: '#1e40af', icon: 'check-circle-2',  spin: false },
+  };
+  const s = STYLES[state] || STYLES.warn;
+  let msg = '';
+  if (state === 'loading') {
+    msg = 'Verificando ubicación…';
+  } else if (state === 'url') {
+    msg = 'Se usarán las coordenadas de la URL de Google Maps.';
+  } else if (state === 'ok') {
+    msg = `Ubicación encontrada: <b>${esc(g.displayName || g.municipio || '')}</b>`;
+  } else if (state === 'warn') {
+    msg = `Ubicación aproximada: <b>${esc(g.displayName || g.municipio || '')}</b><br>
+      <span style="font-size:10.5px">El geocoder ubica la calle pero con precisión media. Si el pin en el mapa sale mal, agrega la URL de Google Maps abajo.</span>`;
+  } else if (state === 'bad') {
+    msg = `El geocoder encontró una ubicación diferente: <b>${esc(g.displayName || '')}</b><br>
+      <span style="font-size:10.5px;font-weight:600">El CP no coincide — es probable que la dirección esté mal ubicada. Agrega la URL de Google Maps para asegurar la ubicación.</span>`;
+  } else if (state === 'miss') {
+    msg = `No se encontró esta dirección en el mapa.<br>
+      <span style="font-size:10.5px;font-weight:600">Agrega una URL de Google Maps para que quede bien ubicado. Sin ella el pin quedará sin coordenadas.</span>`;
+  }
+  const spinStyle = s.spin ? 'animation:spn 1s linear infinite;' : '';
+  el.style.display = '';
+  el.innerHTML = `<div style="background:${s.bg};color:${s.fg};border-radius:8px;padding:8px 11px;font-size:12px;line-height:1.5;display:flex;align-items:flex-start;gap:7px">
+    <i data-lucide="${s.icon}" style="width:14px;height:14px;flex-shrink:0;margin-top:1px;${spinStyle}"></i>
+    <div>${msg}</div>
+  </div>`;
+  if (typeof refreshIcons === 'function') refreshIcons(el);
+}
+
 export function toggleShowCancelled() {
   _showCancelled = !_showCancelled;
   const btn = document.getElementById('btn-toggle-cancelled');
@@ -353,7 +446,7 @@ export async function submitPedido(e) {
       // Dirección para display y para Outlook
       const dir = [calle, colonia, `${cp} ${municipio}`, 'N.L.'].filter(Boolean).join(', ');
 
-      // Coordenadas: URL de GMaps toma precedencia; si no, geocoding estructurado
+      // Coordenadas: URL de GMaps toma precedencia; si no, usar preview ya cacheado o geocodificar
       btn.innerHTML = '<span class="sp"></span> Geocodificando…';
       let loc = null;
       if (url) {
@@ -367,16 +460,21 @@ export async function submitPedido(e) {
           throw new Error('URL corta no resoluble');
         }
       }
-      // Si no hay URL o no dio coords, geocodificar estructurado
+      // Si no hay URL, reusar el resultado del preview (ya geocodificado en live)
       if (!loc || loc.lat == null) {
-        try {
-          const g = await api.geocode.search({
-            structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
-          });
-          if (g?.lat != null) {
-            loc = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false };
-          }
-        } catch (_) { /* sin coords — el mapa lo intentará en background */ }
+        if (_ncGeoResult?.lat != null) {
+          loc = _ncGeoResult;
+        } else {
+          // Preview no corrió todavía — geocodificar ahora
+          try {
+            const g = await api.geocode.search({
+              structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
+            });
+            if (g?.lat != null) {
+              loc = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false };
+            }
+          } catch (_) { /* sin coords — el mapa lo intentará en background */ }
+        }
       }
 
       const row = await api.clientes.create({
