@@ -1,8 +1,10 @@
 export function toast(msg, type = 'ok') {
   const el = document.createElement('div');
   el.className = `toast t${type}`;
-  el.textContent = (type === 'ok' ? '✅' : '❌') + ' ' + msg;
+  const iconName = type === 'ok' ? 'check-circle' : 'x-circle';
+  el.innerHTML = `<span style="display:flex;align-items:center;gap:7px"><i data-lucide="${iconName}" style="width:14px;height:14px;flex-shrink:0"></i>${msg}</span>`;
   document.getElementById('toasts')?.appendChild(el);
+  if (window.lucide) try { window.lucide.createIcons({ nodes: el.querySelectorAll('[data-lucide]') }); } catch (_) {}
   setTimeout(() => el.remove(), 3500);
 }
 

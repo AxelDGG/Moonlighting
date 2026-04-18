@@ -10,9 +10,9 @@ export const MUNIS = {
 };
 
 export const PAGO_CLS = { Efectivo: 'pef', Tarjeta: 'pta', Transferencia: 'ptr', Credito: 'pcr' };
-export const PAGO_IC  = { Efectivo: '💵', Tarjeta: '💳', Transferencia: '🏦', Credito: '📝' };
+export const PAGO_IC  = { Efectivo: 'banknote', Tarjeta: 'credit-card', Transferencia: 'arrow-left-right', Credito: 'file-text' };
 
-export const TIPO_IC = { Abanico: '🪭', Persiana: '🪟', Levantamiento: '📐', Limpieza: '🧹', Mantenimiento: '🔧' };
+export const TIPO_IC = { Abanico: 'wind', Persiana: 'layout-template', Levantamiento: 'ruler', Limpieza: 'sparkles', Mantenimiento: 'wrench' };
 export const TIPO_BG = { Abanico: '#dbeafe', Persiana: '#dcfce7', Levantamiento: '#f3e8ff', Limpieza: '#fef3c7', Mantenimiento: '#ffedd5' };
 export const TIPO_CO = { Abanico: '#1e40af', Persiana: '#166534', Levantamiento: '#581c87', Limpieza: '#92400e', Mantenimiento: '#c2410c' };
 
