@@ -4,7 +4,7 @@ import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, 
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
-import { zonaFromCP, MUNICIPIOS_LIST } from '../zonas.js';
+import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
 import { resolveLocation } from '../geocoding.js';
 
 let cliMode = 'ex';
@@ -14,11 +14,12 @@ let modeloAcIdx = -1;
 let telaAcIdx   = -1;
 let _showCancelled = false;
 
-// ── Geocoding preview para nuevo cliente ─────────────────────────────────────
+// ── Geocoding preview + mini mapa para nuevo cliente ─────────────────────────
 let _previewDebounce = null;
 let _lastPreviewKey  = '';
-// Resultado geocodificado listo para usar en submit (evita doble llamada)
-let _ncGeoResult     = null;
+let _ncGeoResult     = null; // resultado listo para submit (evita doble llamada)
+let _ncMap           = null; // instancia Leaflet del mini mapa
+let _ncMarker        = null; // pin del mini mapa
 
 export function triggerNcGeoPreview() {
   const calle    = document.getElementById('nc-calle')?.value.trim();
@@ -34,39 +35,105 @@ export function triggerNcGeoPreview() {
 }
 
 export function onNcUrlInput() {
-  // Si el usuario pega una URL, limpiar el preview de texto — la URL toma precedencia
   const url = document.getElementById('nc-url')?.value.trim();
-  if (url) {
+  if (!url) { _hideNcMap(); return; }
+
+  // Intentar extraer coords de URL larga directamente (sin round-trip al servidor)
+  let parsed = null;
+  try { parsed = parseGoogleMapsUrl(url); } catch (_) {}
+
+  if (parsed?.lat != null && !parsed.error) {
+    _ncGeoResult = { lat: parsed.lat, lng: parsed.lng, source: 'google_url', confidence: 'high', verified: true, googleMapsUrl: url };
+    _lastPreviewKey = '';
+    _setGeoPreview('url', null);
+    _showNcMap(parsed.lat, parsed.lng, 'URL de Google Maps', 'high');
+  } else {
+    // URL corta o sin coords parseables — se resolverá en submit
     _ncGeoResult = null;
     _lastPreviewKey = '';
     _setGeoPreview('url', null);
+    _hideNcMap();
   }
 }
 
 async function _runGeoPreview(calle, municipio, cp, key) {
   _lastPreviewKey = key;
   _ncGeoResult    = null;
+  _hideNcMap();
   _setGeoPreview('loading', null);
   try {
     const g = await api.geocode.search({
       structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
     });
-    if (_lastPreviewKey !== key) return; // llegó una nueva búsqueda mientras esperábamos
-    if (!g || g.lat == null) {
-      _setGeoPreview('miss', null);
-      return;
-    }
-    // Validar que el CP del resultado coincida con el ingresado
+    if (_lastPreviewKey !== key) return;
+    if (!g || g.lat == null) { _setGeoPreview('miss', null); return; }
+
     const cpMatch = !g.codigoPostal || g.codigoPostal === cp || g.codigoPostal.slice(0,3) === cp.slice(0,3);
-    const quality = cpMatch && g.confidence === 'high' ? 'ok'
-      : cpMatch ? 'warn'
-      : 'bad';
+    const quality = cpMatch && g.confidence === 'high' ? 'ok' : cpMatch ? 'warn' : 'bad';
     _ncGeoResult = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false, cpMatch };
     _setGeoPreview(quality, g);
+    _showNcMap(g.lat, g.lng, g.displayName || `${municipio}, ${cp}`, quality);
   } catch (_) {
     if (_lastPreviewKey !== key) return;
     _setGeoPreview('miss', null);
   }
+}
+
+// ── Mini mapa ─────────────────────────────────────────────────────────────────
+function _showNcMap(lat, lng, label, quality) {
+  const wrap = document.getElementById('nc-map-wrap');
+  const container = document.getElementById('nc-map');
+  if (!wrap || !container || typeof L === 'undefined') return;
+
+  const pinColor = quality === 'ok' || quality === 'high' ? '#22c55e'
+    : quality === 'warn' || quality === 'medium' ? '#f59e0b'
+    : '#ef4444';
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${pinColor};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8],
+  });
+
+  wrap.style.display = '';
+
+  if (!_ncMap) {
+    _ncMap = L.map(container, { zoomControl: true, attributionControl: false }).setView([lat, lng], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_ncMap);
+    _ncMarker = L.marker([lat, lng], { icon, draggable: true, autoPan: true }).addTo(_ncMap);
+    _ncMarker.on('dragend', () => {
+      const pos = _ncMarker.getLatLng();
+      _ncGeoResult = {
+        lat: +pos.lat.toFixed(6), lng: +pos.lng.toFixed(6),
+        source: 'manual_drag', confidence: 'high', verified: true,
+        googleMapsUrl: `https://www.google.com/maps?q=${pos.lat.toFixed(6)},${pos.lng.toFixed(6)}`,
+      };
+      _updateNcMarkerIcon('#22c55e');
+      _setGeoPreview('url', null); // reusar mensaje "se usarán coords de URL"
+    });
+  } else {
+    _ncMap.setView([lat, lng], 16);
+    _ncMarker.setLatLng([lat, lng]);
+    _ncMarker.setIcon(icon);
+  }
+
+  _ncMarker.bindTooltip(label, { permanent: false, direction: 'top' });
+  // Leaflet necesita que el contenedor sea visible para calcular tamaño
+  setTimeout(() => _ncMap?.invalidateSize(), 50);
+}
+
+function _hideNcMap() {
+  const wrap = document.getElementById('nc-map-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+function _updateNcMarkerIcon(color) {
+  if (!_ncMarker) return;
+  _ncMarker.setIcon(L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8],
+  }));
 }
 
 function _setGeoPreview(state, g) {
@@ -325,6 +392,15 @@ export function openPedidoModal(id = null) {
   document.getElementById('fp').reset();
   document.getElementById('p-eid').value = '';
   _populateMuniSelect();
+  // Resetear estado del geocoder preview
+  _ncGeoResult = null;
+  _lastPreviewKey = '';
+  clearTimeout(_previewDebounce);
+  _hideNcMap();
+  const prev = document.getElementById('nc-geo-preview');
+  if (prev) prev.style.display = 'none';
+  // Destruir mapa anterior para evitar conflictos al reabrir el modal
+  if (_ncMap) { _ncMap.remove(); _ncMap = null; _ncMarker = null; }
   document.getElementById('mp-t').textContent = id ? 'Editar Pedido' : 'Nuevo Pedido';
   document.getElementById('p-fecha').value = todayStr();
   selectedModeloPrecio = 0; selectedTelaPrice = 0;
