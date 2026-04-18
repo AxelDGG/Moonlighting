@@ -18,6 +18,7 @@ import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
 import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile } from './modules/configuracion.js';
+import { renderChatbot, sendChatMsg, clearChat, chatKeydown } from './modules/chatbot.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
@@ -28,6 +29,7 @@ const TAB_TITLES = {
   cal:            'Calendario',
   mapa:           'Mapa',
   metricas:       'Métricas',
+  asistente:      'Asistente IA',
   configuracion:  'Configuración',
 };
 
@@ -48,6 +50,7 @@ function showTab(name) {
   else if (name === 'cal')           renderCal();
   else if (name === 'mapa')          initMap();
   else if (name === 'metricas')      renderMetricas();
+  else if (name === 'asistente')     renderChatbot();
   else if (name === 'configuracion') renderConfiguracion();
 
   // Close sidebar on mobile
@@ -338,6 +341,11 @@ window.openTecnicosManager = openTecnicosManager;
 window.openTecnicoModal    = openTecnicoModal;
 window.submitTecnico       = submitTecnico;
 window.deleteTecnico       = deleteTecnico;
+
+// Asistente IA
+window.sendChatMsg  = sendChatMsg;
+window.clearChat    = clearChat;
+window.chatKeydown  = chatKeydown;
 
 // Configuración
 window.renderConfiguracion = renderConfiguracion;

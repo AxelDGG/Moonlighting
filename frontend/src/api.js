@@ -120,7 +120,8 @@ export const api = {
 
   // ========== AI ==========
   ai: {
-    feedback: (data) => post('/ai/feedback', data),
+    feedback: (data)     => post('/ai/feedback', data),
+    chat:     (messages) => post('/ai/chat', { messages }),
   },
 
   // ========== CALENDARIO ==========

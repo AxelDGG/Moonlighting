@@ -1,5 +1,197 @@
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
+/* ── CHAT TOOLS ── */
+const CHAT_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'query_inventory',
+      description: 'Consulta el inventario de productos (abanicos, persianas, refacciones) por ubicación o nombre. Úsalo cuando pregunten cuánto hay de algo o qué hay en un lugar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nombre_item: {
+            type: 'string',
+            description: 'Nombre o parte del nombre del producto a buscar (opcional)',
+          },
+          nombre_ubicacion: {
+            type: 'string',
+            description: 'Nombre o parte del nombre de la ubicación a filtrar (opcional)',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_orders_today',
+      description: 'Obtiene los pedidos con fecha de servicio en una fecha específica (por defecto hoy). Úsalo cuando pregunten qué pedidos hay hoy o en una fecha.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fecha: {
+            type: 'string',
+            description: 'Fecha en formato YYYY-MM-DD. Si no se especifica, usar la fecha de hoy.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_sales_today',
+      description: 'Consulta el total vendido (pagos recibidos) en una fecha o rango. Úsalo cuando pregunten cuánto se ha vendido o cobrado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          desde: {
+            type: 'string',
+            description: 'Fecha inicio en formato YYYY-MM-DD. Si preguntan "hoy" usar la fecha actual.',
+          },
+          hasta: {
+            type: 'string',
+            description: 'Fecha fin en formato YYYY-MM-DD. Si preguntan "hoy" usar la misma fecha que desde.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_orders_by_status',
+      description: 'Lista pedidos filtrados por estado. Úsalo cuando pregunten por pedidos pendientes, en proceso, cancelados, completados, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estado: {
+            type: 'string',
+            description: 'Estado del pedido: pendiente, en_proceso, completado, cancelado, reagendado',
+          },
+          limite: {
+            type: 'integer',
+            description: 'Número máximo de resultados a retornar (default 10)',
+          },
+        },
+        required: ['estado'],
+      },
+    },
+  },
+];
+
+async function executeTool(toolName, args, supabase) {
+  if (toolName === 'query_inventory') {
+    let query = supabase
+      .from('inventario_existencias')
+      .select('cantidad, items_catalogo(nombre, sku), ubicaciones_inventario(nombre)')
+      .gt('cantidad', 0);
+
+    if (args.nombre_ubicacion) {
+      const { data: ubs } = await supabase
+        .from('ubicaciones_inventario')
+        .select('id, nombre')
+        .ilike('nombre', `%${args.nombre_ubicacion}%`);
+      if (ubs && ubs.length > 0) {
+        query = query.in('ubicacion_id', ubs.map(u => u.id));
+      }
+    }
+
+    const { data, error } = await query.order('cantidad', { ascending: false }).limit(30);
+    if (error) return { error: 'No se pudo consultar el inventario' };
+
+    let rows = data || [];
+    if (args.nombre_item) {
+      const q = args.nombre_item.toLowerCase();
+      rows = rows.filter(r => r.items_catalogo?.nombre?.toLowerCase().includes(q));
+    }
+
+    if (rows.length === 0) return { resultado: 'No se encontraron productos con esos criterios.' };
+    return {
+      resultado: rows.map(r =>
+        `${r.items_catalogo?.nombre || '?'} (${r.items_catalogo?.sku || '-'}) en ${r.ubicaciones_inventario?.nombre || '?'}: ${r.cantidad} unidades`
+      ),
+    };
+  }
+
+  if (toolName === 'query_orders_today') {
+    const fecha = args.fecha || new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('id, folio, fecha_servicio, estados_pedido(nombre), clientes(nombre), total, notas_operativas')
+      .gte('fecha_servicio', `${fecha}T00:00:00`)
+      .lte('fecha_servicio', `${fecha}T23:59:59`)
+      .order('fecha_servicio');
+    if (error) return { error: 'No se pudieron consultar los pedidos' };
+    if (!data || data.length === 0) return { resultado: `No hay pedidos con fecha de servicio el ${fecha}.` };
+    return {
+      fecha,
+      total_pedidos: data.length,
+      pedidos: data.map(p => ({
+        id: p.id,
+        folio: p.folio,
+        cliente: p.clientes?.nombre || '?',
+        estado: p.estados_pedido?.nombre || '?',
+        total: p.total,
+        hora: p.fecha_servicio ? new Date(p.fecha_servicio).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Monterrey' }) : null,
+        notas: p.notas_operativas,
+      })),
+    };
+  }
+
+  if (toolName === 'query_sales_today') {
+    const today = new Date().toISOString().slice(0, 10);
+    const desde = args.desde || today;
+    const hasta = args.hasta || today;
+    const { data, error } = await supabase
+      .from('pagos')
+      .select('monto, fecha_pago, metodos_pago(nombre)')
+      .gte('fecha_pago', `${desde}T00:00:00`)
+      .lte('fecha_pago', `${hasta}T23:59:59`);
+    if (error) return { error: 'No se pudieron consultar los pagos' };
+    const total = (data || []).reduce((s, p) => s + (p.monto || 0), 0);
+    const porMetodo = {};
+    for (const p of data || []) {
+      const m = p.metodos_pago?.nombre || 'Sin método';
+      porMetodo[m] = (porMetodo[m] || 0) + (p.monto || 0);
+    }
+    return {
+      desde,
+      hasta,
+      total_cobrado: total,
+      num_pagos: (data || []).length,
+      por_metodo: porMetodo,
+    };
+  }
+
+  if (toolName === 'query_orders_by_status') {
+    const limite = args.limite || 10;
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('id, folio, fecha_pedido, fecha_servicio, estados_pedido(nombre), clientes(nombre), total, saldo')
+      .eq('estado_id', args.estado)
+      .order('fecha_pedido', { ascending: false })
+      .limit(limite);
+    if (error) return { error: 'No se pudieron consultar los pedidos' };
+    if (!data || data.length === 0) return { resultado: `No hay pedidos con estado "${args.estado}".` };
+    return {
+      estado: args.estado,
+      total_encontrados: data.length,
+      pedidos: data.map(p => ({
+        id: p.id,
+        folio: p.folio,
+        cliente: p.clientes?.nombre || '?',
+        total: p.total,
+        saldo: p.saldo,
+        fecha_servicio: p.fecha_servicio ? p.fecha_servicio.slice(0, 10) : null,
+      })),
+    };
+  }
+
+  return { error: `Herramienta desconocida: ${toolName}` };
+}
+
 const zonaSchema = { type: 'object', properties: { zona: { type: 'string' }, avg: { type: 'number' } } };
 const tecSchema  = { type: 'object', properties: { tec: { type: 'string' }, pct: { type: 'number' }, n: { type: 'integer' } } };
 const tipoSchema = { type: 'object', properties: { tipo: { type: 'string' }, avg: { type: 'number' } } };
@@ -113,6 +305,99 @@ export default async function aiRoutes(fastify) {
 
     const json = await res.json();
     const text = json.choices?.[0]?.message?.content || 'Sin respuesta del modelo.';
+    return { text, model: GROQ_MODEL };
+  });
+
+  /* ── POST /chat ── conversational chatbot with tool calling ── */
+  fastify.post('/chat', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['messages'],
+        properties: {
+          messages: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 40,
+            items: {
+              type: 'object',
+              required: ['role', 'content'],
+              properties: {
+                role:    { type: 'string', enum: ['user', 'assistant'] },
+                content: { type: 'string', maxLength: 2000 },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
+      return reply.code(503).send({ error: 'GROQ_API_KEY no configurado en el servidor' });
+    }
+
+    const today = new Date().toLocaleDateString('es', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Monterrey' });
+    const todayISO = new Date().toLocaleDateString('sv', { timeZone: 'America/Monterrey' });
+
+    const systemMsg = {
+      role: 'system',
+      content: `Eres el asistente de Moonlighting, empresa de instalación de abanicos de techo y persianas en Monterrey, NL.
+Hoy es ${today} (${todayISO}).
+Respondes en español, de forma concisa y útil. Cuando el usuario pregunta sobre datos del negocio (inventario, pedidos, ventas) SIEMPRE usas las herramientas disponibles para consultar información real. No inventes datos ni des respuestas genéricas cuando hay una herramienta que puede resolver la pregunta.`,
+    };
+
+    const messages = [systemMsg, ...req.body.messages];
+
+    const callGroq = async (msgs) => {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqApiKey}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: msgs,
+          tools: CHAT_TOOLS,
+          tool_choice: 'auto',
+          temperature: 0.3,
+          max_tokens: 800,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || 'Error al contactar el modelo');
+      }
+      return res.json();
+    };
+
+    let json = await callGroq(messages);
+    let choice = json.choices?.[0];
+
+    // If the model wants to call tools, execute them and call again
+    if (choice?.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
+      messages.push(choice.message);
+
+      for (const tc of choice.message.tool_calls) {
+        let toolArgs = {};
+        try { toolArgs = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore */ }
+        const toolResult = await executeTool(tc.function.name, toolArgs, fastify.supabase);
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      json = await callGroq(messages);
+      choice = json.choices?.[0];
+    }
+
+    const text = choice?.message?.content || 'Sin respuesta del modelo.';
     return { text, model: GROQ_MODEL };
   });
 }
