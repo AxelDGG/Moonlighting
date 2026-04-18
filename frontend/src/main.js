@@ -60,85 +60,66 @@ function showTab(name) {
 
 /* ── APPLY ROLE RESTRICTIONS ── */
 // Preflight: se ejecuta ANTES de showApp() para evitar flash del UI completo
-// mientras loadAll() está corriendo. Solo necesita el profile, no depende de
-// state.tecnicos/pedidos (eso se usa en applyRoleRestrictions después).
+// mientras loadAll() está corriendo. Oculta navs según rol+permisos y activa
+// la pestaña correcta en el DOM (sin disparar renders — eso lo hace
+// applyRoleRestrictions después de loadAll).
 function applyRolePreflight() {
   const profile = state.userProfile;
   if (!profile) return;
-  const hide = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  };
-  const show = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = '';
+  const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+  const show = (id) => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+  const activate = (name) => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ni-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + name)?.classList.add('active');
+    document.getElementById('nav-' + name)?.classList.add('active');
+    const ptitle = document.getElementById('ptitle');
+    if (ptitle) ptitle.textContent = TAB_TITLES[name] || name;
   };
 
   if (profile.role === 'tecnico') {
     ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
     show('nav-tecnico');
-    document.getElementById('nav-tecnico')?.classList.add('active');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-tecnico')?.classList.add('active');
-    const ptitle = document.getElementById('ptitle');
-    if (ptitle) ptitle.textContent = TAB_TITLES.tecnico;
+    activate('tecnico');
     return;
   }
 
-  // Para gestor y admin: ocultar Configuración por defecto (admin la reactiva en applyRoleRestrictions)
-  if (profile.role !== 'admin') hide('nav-configuracion');
+  const admin = profile.role === 'admin';
+  const perms = profile.permissions || {};
+
+  if (!admin && perms.ver_dashboard  === false) hide('nav-dashboard');
+  if (!admin && perms.ver_metricas   === false) hide('nav-metricas');
+  if (!admin && perms.ver_almacen    === false) hide('nav-almacen');
+  if (!admin && perms.ver_calendario === false) hide('nav-cal');
+  if (!admin && perms.ver_mapa       === false) hide('nav-mapa');
+  if (admin) show('nav-configuracion'); else hide('nav-configuracion');
+
+  const firstAvail = admin ? 'dashboard'
+    : perms.ver_dashboard !== false ? 'dashboard'
+    : 'clientes';
+  activate(firstAvail);
 }
 
 function applyRoleRestrictions() {
   const profile = state.userProfile;
   if (!profile) return;
 
-  const admin    = profile.role === 'admin';
-  const isTec    = profile.role === 'tecnico';
-  const perms    = profile.permissions || {};
-
-  const hide = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  };
+  const admin = profile.role === 'admin';
+  const isTec = profile.role === 'tecnico';
+  const perms = profile.permissions || {};
 
   if (isTec) {
-    // Técnico: solo ve "Mi agenda" — oculta todo el resto del nav.
-    ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
-    const navTec = document.getElementById('nav-tecnico');
-    if (navTec) navTec.style.display = '';
-    // Guardar nombre del técnico asignado para filtrar pedidos
+    // Nombre del técnico ya disponible porque loadAll pobló state.tecnicos
     const tec = profile.tecnico_id ? state.tecnicos.find(t => t.id === profile.tecnico_id) : null;
     state._tecnicoNombre = tec?.nombre || null;
     showTab('tecnico');
     return;
   }
 
-  // Dashboard: gestor sin permiso
-  if (!admin && perms.ver_dashboard === false) hide('nav-dashboard');
-
-  // Métricas: gestor sin permiso
-  if (!admin && perms.ver_metricas === false) hide('nav-metricas');
-
-  // Almacén: gestor sin permiso
-  if (!admin && perms.ver_almacen === false) hide('nav-almacen');
-
-  // Calendario: gestor sin permiso
-  if (!admin && perms.ver_calendario === false) hide('nav-cal');
-
-  // Mapa: gestor sin permiso
-  if (!admin && perms.ver_mapa === false) hide('nav-mapa');
-
-  // Configuración: solo admin
-  const navCfg = document.getElementById('nav-configuracion');
-  if (navCfg) navCfg.style.display = admin ? '' : 'none';
-
-  // Porcentajes de técnicos
+  // Post-render: estos ocultamientos necesitan que el DOM ya tenga los elementos
   if (!admin && perms.ver_porcentajes === false) {
     document.querySelectorAll('.tec-porcentaje').forEach(el => el.style.display = 'none');
   }
-
-  // Botón crear técnico
   if (!admin && perms.crear_tecnicos === false) {
     document.querySelectorAll('.btn-crear-tecnico').forEach(el => el.style.display = 'none');
   }
@@ -146,7 +127,6 @@ function applyRoleRestrictions() {
   const firstAvail = admin ? 'dashboard'
     : perms.ver_dashboard !== false ? 'dashboard'
     : 'clientes';
-
   showTab(firstAvail);
 }
 
