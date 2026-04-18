@@ -378,9 +378,11 @@ Respondes en español, de forma concisa y útil. Cuando el usuario pregunta sobr
     let json = await callGroq(messages);
     let choice = json.choices?.[0];
 
-    // If the model wants to call tools, execute them and call again
-    if (choice?.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
-      messages.push(choice.message);
+    // Loop to handle multi-hop tool calls (max 4 rounds)
+    let maxIter = 4;
+    while (choice?.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0 && maxIter-- > 0) {
+      // Normalize content: null breaks some API parsers
+      messages.push({ ...choice.message, content: choice.message.content ?? '' });
 
       for (const tc of choice.message.tool_calls) {
         let toolArgs = {};
@@ -397,7 +399,7 @@ Respondes en español, de forma concisa y útil. Cuando el usuario pregunta sobr
       choice = json.choices?.[0];
     }
 
-    const text = choice?.message?.content || 'Sin respuesta del modelo.';
+    const text = choice?.message?.content || 'No pude generar una respuesta. Intenta de nuevo.';
     return { text, model: GROQ_MODEL };
   });
 }

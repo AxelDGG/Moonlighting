@@ -26,7 +26,7 @@ function renderMessages() {
         <div class="chat-empty-icon"><i data-lucide="bot"></i></div>
         <p>Hola, soy tu asistente de Moonlighting.<br>Pregúntame sobre inventario, pedidos o ventas.</p>
         <div class="chat-suggestions">
-          ${SUGGESTIONS.map(s => `<button class="chat-chip" onclick="sendChatMsg(${JSON.stringify(s)})">${esc(s)}</button>`).join('')}
+          ${SUGGESTIONS.map(s => `<button class="chat-chip" onclick="sendChatMsg(this.getAttribute('data-q'))" data-q="${esc(s)}">${esc(s)}</button>`).join('')}
         </div>
       </div>`;
     refreshIcons(container);
