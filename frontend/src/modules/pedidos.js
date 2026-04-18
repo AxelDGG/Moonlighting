@@ -4,7 +4,7 @@ import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, 
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
-import { parseAddress, zonaFromCP } from '../zonas.js';
+import { zonaFromCP, MUNICIPIOS_LIST } from '../zonas.js';
 import { resolveLocation } from '../geocoding.js';
 
 let cliMode = 'ex';
@@ -216,9 +216,22 @@ export function selectTela(nombre, precio, stock) {
 }
 
 // ── OPEN MODAL ───────────────────────────────────────────────────────────────
+function _populateMuniSelect() {
+  const sel = document.getElementById('nc-muni');
+  if (!sel || sel.dataset.populated) return;
+  MUNICIPIOS_LIST.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    sel.appendChild(opt);
+  });
+  sel.dataset.populated = '1';
+}
+
 export function openPedidoModal(id = null) {
   document.getElementById('fp').reset();
   document.getElementById('p-eid').value = '';
+  _populateMuniSelect();
   document.getElementById('mp-t').textContent = id ? 'Editar Pedido' : 'Nuevo Pedido';
   document.getElementById('p-fecha').value = todayStr();
   selectedModeloPrecio = 0; selectedTelaPrice = 0;
@@ -318,43 +331,62 @@ export async function submitPedido(e) {
   let clienteId = null;
   try {
     if (cliMode === 'nw') {
-      const nombre = document.getElementById('nc-n').value.trim();
-      const numero = document.getElementById('nc-t').value.trim();
-      const dir    = document.getElementById('nc-d').value.trim();
-      const url    = document.getElementById('nc-url')?.value.trim() || '';
+      const nombre   = document.getElementById('nc-n').value.trim();
+      const numero   = document.getElementById('nc-t').value.trim();
+      const calle    = document.getElementById('nc-calle').value.trim();
+      const colonia  = document.getElementById('nc-col')?.value.trim() || '';
+      const municipio = document.getElementById('nc-muni').value;
+      const cp       = document.getElementById('nc-cp').value.trim();
+      const url      = document.getElementById('nc-url')?.value.trim() || '';
 
-      // Parsear dirección en formato de Google Maps:
-      //   "Calle #, Colonia, CP Municipio, Estado"
-      const addr = parseAddress(dir);
-      if (!addr || !addr.codigoPostal || !addr.municipio) {
-        alert('La dirección no contiene código postal o municipio reconocibles.\n\nUsa el formato de Google Maps:\n  Calle #, Colonia, CP Municipio, Estado\n\nEjemplo: "Pedregal de La Cascada 6769, Pedregal La Silla, 64898 Monterrey, N.L."');
-        throw new Error('Dirección inválida');
-      }
-      const cp        = addr.codigoPostal;
-      const municipio = addr.municipio;
-      const zona      = addr.zona || zonaFromCP(municipio, cp);
+      // Validaciones individuales con mensajes claros
+      if (!calle)     { alert('Ingresa la calle y número.'); throw new Error('Falta calle'); }
+      if (!municipio) { alert('Selecciona el municipio.'); throw new Error('Falta municipio'); }
+      if (!/^\d{5}$/.test(cp)) { alert('El código postal debe tener exactamente 5 dígitos.'); throw new Error('CP inválido'); }
+
+      const zona = zonaFromCP(municipio, cp);
       if (!zona) {
-        alert(`No se pudo determinar la zona para ${municipio} con CP ${cp}. Verifica que el CP sea correcto.`);
+        alert(`CP ${cp} no corresponde a ninguna zona registrada en ${municipio}.\nVerifica que el código postal sea correcto.`);
         throw new Error('Zona no determinable');
       }
 
-      // Coordenadas: usar pipeline unificado (URL larga/corta o texto)
+      // Dirección para display y para Outlook
+      const dir = [calle, colonia, `${cp} ${municipio}`, 'N.L.'].filter(Boolean).join(', ');
+
+      // Coordenadas: URL de GMaps toma precedencia; si no, geocoding estructurado
       btn.innerHTML = '<span class="sp"></span> Geocodificando…';
-      const loc = await resolveLocation({ url: url || null, address: dir });
-      if (loc?.error === 'low_zoom_search') {
-        alert(`La URL es de una búsqueda con zoom muy alejado (${loc.zoom || '?'}×), por lo que las coordenadas son del centro del mapa.\n\nAbre el pin del lugar (URL con "/maps/place/...") o acerca el mapa a zoom ≥ 17.`);
-        throw new Error('URL imprecisa');
+      let loc = null;
+      if (url) {
+        loc = await resolveLocation({ url });
+        if (loc?.error === 'low_zoom_search') {
+          alert(`La URL tiene zoom muy alejado (${loc.zoom || '?'}×). Abre el pin del lugar en Google Maps y copia esa URL.`);
+          throw new Error('URL imprecisa');
+        }
+        if (loc?.error === 'short_url_unresolved') {
+          alert('No se pudo resolver el enlace corto. Intenta con la URL larga de Google Maps.');
+          throw new Error('URL corta no resoluble');
+        }
       }
-      if (loc?.error === 'short_url_unresolved') {
-        alert('No se pudo resolver el enlace corto. Intenta con la URL larga de Google Maps.');
-        throw new Error('URL corta no resoluble');
+      // Si no hay URL o no dio coords, geocodificar estructurado
+      if (!loc || loc.lat == null) {
+        try {
+          const g = await api.geocode.search({
+            structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
+          });
+          if (g?.lat != null) {
+            loc = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false };
+          }
+        } catch (_) { /* sin coords — el mapa lo intentará en background */ }
       }
-      const lat = loc?.lat ?? null;
-      const lng = loc?.lng ?? null;
 
       const row = await api.clientes.create({
-        nombre, numero, direccion: dir, metodo_pago: pago, num_pedido: null,
-        lat, lng, municipio,
+        nombre, numero,
+        direccion: dir,
+        metodo_pago: pago,
+        num_pedido: null,
+        lat: loc?.lat ?? null,
+        lng: loc?.lng ?? null,
+        municipio,
         google_maps_url: loc?.googleMapsUrl || url || null,
         codigo_postal: cp,
         zona,
