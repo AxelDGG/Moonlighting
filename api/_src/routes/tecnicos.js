@@ -13,6 +13,19 @@ const tecnicoBodySchema = {
   additionalProperties: false,
 };
 
+// Detects "column 'vehiculo' does not exist" from PostgREST (the migration
+// that adds tecnicos.vehiculo may not have been applied in all environments).
+function isVehiculoColumnMissing(error) {
+  if (!error) return false;
+  const msg = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+  return msg.includes('vehiculo') && (msg.includes('column') || msg.includes('schema cache') || error.code === 'PGRST204');
+}
+
+function stripVehiculo(body) {
+  const { vehiculo, ...rest } = body;
+  return rest;
+}
+
 export default async function tecnicosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
 
@@ -60,13 +73,27 @@ export default async function tecnicosRoutes(fastify) {
       },
     },
   }, async (req, reply) => {
-    const { data, error } = await fastify.supabase
+    let attempt = await fastify.supabase
       .from('tecnicos')
       .insert(req.body)
       .select()
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al crear técnico', details: error.message });
-    return reply.code(201).send(data);
+
+    if (attempt.error && isVehiculoColumnMissing(attempt.error)) {
+      fastify.log.warn('tecnicos.vehiculo column missing — retrying without it');
+      attempt = await fastify.supabase
+        .from('tecnicos')
+        .insert(stripVehiculo(req.body))
+        .select()
+        .single();
+    }
+
+    if (attempt.error) {
+      return reply.code(500).send({
+        error: `Error al crear técnico: ${attempt.error.message}`,
+      });
+    }
+    return reply.code(201).send(attempt.data);
   });
 
   // PUT /:id - Actualizar técnico
@@ -76,11 +103,24 @@ export default async function tecnicosRoutes(fastify) {
       body: tecnicoBodySchema,
     },
   }, async (req, reply) => {
-    const { error } = await fastify.supabase
+    let attempt = await fastify.supabase
       .from('tecnicos')
       .update(req.body)
       .eq('id', req.params.id);
-    if (error) return reply.code(500).send({ error: 'Error al actualizar técnico' });
+
+    if (attempt.error && isVehiculoColumnMissing(attempt.error)) {
+      fastify.log.warn('tecnicos.vehiculo column missing — retrying without it');
+      attempt = await fastify.supabase
+        .from('tecnicos')
+        .update(stripVehiculo(req.body))
+        .eq('id', req.params.id);
+    }
+
+    if (attempt.error) {
+      return reply.code(500).send({
+        error: `Error al actualizar técnico: ${attempt.error.message}`,
+      });
+    }
     return reply.code(204).send();
   });
 
