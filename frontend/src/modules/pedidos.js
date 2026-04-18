@@ -21,58 +21,131 @@ let _ncGeoResult     = null; // resultado listo para submit (evita doble llamada
 let _ncMap           = null; // instancia Leaflet del mini mapa
 let _ncMarker        = null; // pin del mini mapa
 
+// triggerNcGeoPreview ya no es el camino principal — la URL es la fuente de verdad.
+// Se mantiene como fallback si el usuario no tiene URL y llena los campos a mano.
 export function triggerNcGeoPreview() {
-  const calle    = document.getElementById('nc-calle')?.value.trim();
+  // Si ya hay una URL resuelta, no sobreescribir
+  const url = document.getElementById('nc-url')?.value.trim();
+  if (url) return;
+
+  const calle     = document.getElementById('nc-calle')?.value.trim();
   const municipio = document.getElementById('nc-muni')?.value;
-  const cp       = document.getElementById('nc-cp')?.value.trim();
-  if (!calle || !municipio || !/^\d{5}$/.test(cp)) return;
+  if (!calle || !municipio) return;
 
-  const key = `${calle}|${municipio}|${cp}`;
+  const key = `${calle}|${municipio}`;
   if (key === _lastPreviewKey) return;
-
   clearTimeout(_previewDebounce);
-  _previewDebounce = setTimeout(() => _runGeoPreview(calle, municipio, cp, key), 400);
+  _previewDebounce = setTimeout(() => _runGeoPreview(calle, municipio, null, key), 400);
 }
 
+let _urlDebounce = null;
 export function onNcUrlInput() {
   const url = document.getElementById('nc-url')?.value.trim();
-  if (!url) { _hideNcMap(); return; }
+  if (!url) {
+    _ncGeoResult = null;
+    _lastPreviewKey = '';
+    _hideNcMap();
+    const prev = document.getElementById('nc-geo-preview');
+    if (prev) prev.style.display = 'none';
+    return;
+  }
 
-  // Intentar extraer coords de URL larga directamente (sin round-trip al servidor)
+  clearTimeout(_urlDebounce);
+  _urlDebounce = setTimeout(() => _resolveUrlAndPreview(url), 300);
+}
+
+async function _resolveUrlAndPreview(url) {
+  _setGeoPreview('loading', null);
+  _hideNcMap();
+  _ncGeoResult = null;
+
+  // 1) Intentar parsear directo (URL larga)
   let parsed = null;
   try { parsed = parseGoogleMapsUrl(url); } catch (_) {}
 
-  if (parsed?.lat != null && !parsed.error) {
-    _ncGeoResult = { lat: parsed.lat, lng: parsed.lng, source: 'google_url', confidence: 'high', verified: true, googleMapsUrl: url };
-    _lastPreviewKey = '';
-    _setGeoPreview('url', null);
-    _showNcMap(parsed.lat, parsed.lng, 'URL de Google Maps', 'high');
-  } else {
-    // URL corta o sin coords parseables — se resolverá en submit
-    _ncGeoResult = null;
-    _lastPreviewKey = '';
-    _setGeoPreview('url', null);
-    _hideNcMap();
+  // 2) Si es short link o no se parsearon coords, resolver en el servidor
+  if (!parsed?.lat || parsed.error) {
+    if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url)) {
+      try {
+        const r = await api.geocode.resolveShort(url);
+        if (r?.url) {
+          try { parsed = parseGoogleMapsUrl(r.url); } catch (_) {}
+          // Actualizar el campo con la URL larga para que se vea qué se resolvió
+          // (no forzar — solo guardar internamente)
+        }
+      } catch (_) {
+        _setGeoPreview('miss', null);
+        return;
+      }
+    }
   }
+
+  if (!parsed?.lat || parsed.error === 'low_zoom_search') {
+    _setGeoPreview('miss', null);
+    return;
+  }
+
+  const { lat, lng } = parsed;
+
+  // 3) Reverse geocode para obtener municipio + CP automáticamente
+  let municipio = null, cp = null;
+  try {
+    const rev = await api.geocode.reverse(lat, lng);
+    municipio = rev?.municipio || null;
+    cp        = rev?.codigoPostal || null;
+  } catch (_) {}
+
+  // Auto-seleccionar municipio en el dropdown
+  if (municipio) {
+    const sel = document.getElementById('nc-muni');
+    if (sel) {
+      const opt = Array.from(sel.options).find(o => o.value === municipio);
+      if (opt) sel.value = municipio;
+    }
+  }
+
+  _ncGeoResult = {
+    lat, lng,
+    source: 'google_url',
+    confidence: 'high',
+    verified: true,
+    googleMapsUrl: url,
+    codigoPostal: cp,
+    municipio,
+  };
+  _lastPreviewKey = '';
+
+  const zona = cp && municipio ? zonaFromCP(municipio, cp) : null;
+  const zonaLabel = zona ? ` · Zona <b>${zona}</b>` : '';
+  const muniLabel = municipio || 'municipio detectado';
+  _setGeoPreview('url', { displayName: muniLabel + zonaLabel, zona, municipio });
+  _showNcMap(lat, lng, muniLabel, 'high');
 }
 
-async function _runGeoPreview(calle, municipio, cp, key) {
+async function _runGeoPreview(calle, municipio, _cp, key) {
   _lastPreviewKey = key;
   _ncGeoResult    = null;
   _hideNcMap();
   _setGeoPreview('loading', null);
   try {
     const g = await api.geocode.search({
-      structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
+      structured: { street: calle, city: municipio, state: 'Nuevo León' },
+      q: `${calle}, ${municipio}, Nuevo León`,
     });
     if (_lastPreviewKey !== key) return;
     if (!g || g.lat == null) { _setGeoPreview('miss', null); return; }
 
-    const cpMatch = !g.codigoPostal || g.codigoPostal === cp || g.codigoPostal.slice(0,3) === cp.slice(0,3);
-    const quality = cpMatch && g.confidence === 'high' ? 'ok' : cpMatch ? 'warn' : 'bad';
-    _ncGeoResult = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false, cpMatch };
+    const quality = g.confidence === 'high' ? 'ok' : g.confidence === 'medium' ? 'warn' : 'bad';
+    _ncGeoResult = {
+      lat: g.lat, lng: g.lng,
+      source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured',
+      confidence: g.confidence || 'medium',
+      verified: false,
+      codigoPostal: g.codigoPostal || null,
+      municipio: g.municipio || municipio,
+    };
     _setGeoPreview(quality, g);
-    _showNcMap(g.lat, g.lng, g.displayName || `${municipio}, ${cp}`, quality);
+    _showNcMap(g.lat, g.lng, g.displayName || municipio, quality);
   } catch (_) {
     if (_lastPreviewKey !== key) return;
     _setGeoPreview('miss', null);
@@ -152,7 +225,9 @@ function _setGeoPreview(state, g) {
   if (state === 'loading') {
     msg = 'Verificando ubicación…';
   } else if (state === 'url') {
-    msg = 'Se usarán las coordenadas de la URL de Google Maps.';
+    msg = g?.displayName
+      ? `Ubicación confirmada — ${g.displayName}`
+      : 'Coordenadas obtenidas de Google Maps.';
   } else if (state === 'ok') {
     msg = `Ubicación encontrada: <b>${esc(g.displayName || g.municipio || '')}</b>`;
   } else if (state === 'warn') {
@@ -500,57 +575,35 @@ export async function submitPedido(e) {
   let clienteId = null;
   try {
     if (cliMode === 'nw') {
-      const nombre   = document.getElementById('nc-n').value.trim();
-      const numero   = document.getElementById('nc-t').value.trim();
-      const calle    = document.getElementById('nc-calle').value.trim();
-      const colonia  = document.getElementById('nc-col')?.value.trim() || '';
-      const municipio = document.getElementById('nc-muni').value;
-      const cp       = document.getElementById('nc-cp').value.trim();
-      const url      = document.getElementById('nc-url')?.value.trim() || '';
+      const nombre    = document.getElementById('nc-n').value.trim();
+      const numero    = document.getElementById('nc-t').value.trim();
+      const calle     = document.getElementById('nc-calle').value.trim();
+      const colonia   = document.getElementById('nc-col')?.value.trim() || '';
+      const municipio = document.getElementById('nc-muni').value || _ncGeoResult?.municipio || '';
+      const url       = document.getElementById('nc-url')?.value.trim() || '';
 
-      // Validaciones individuales con mensajes claros
       if (!calle)     { alert('Ingresa la calle y número.'); throw new Error('Falta calle'); }
-      if (!municipio) { alert('Selecciona el municipio.'); throw new Error('Falta municipio'); }
-      if (!/^\d{5}$/.test(cp)) { alert('El código postal debe tener exactamente 5 dígitos.'); throw new Error('CP inválido'); }
+      if (!municipio) { alert('Selecciona el municipio (o pega una URL de Google Maps para detectarlo automáticamente).'); throw new Error('Falta municipio'); }
 
-      const zona = zonaFromCP(municipio, cp);
-      if (!zona) {
-        alert(`CP ${cp} no corresponde a ninguna zona registrada en ${municipio}.\nVerifica que el código postal sea correcto.`);
-        throw new Error('Zona no determinable');
-      }
+      // CP y zona vienen del reverse geocode del pin — no del formulario
+      const cp   = _ncGeoResult?.codigoPostal || null;
+      const zona = cp ? zonaFromCP(municipio, cp) : null;
 
       // Dirección para display y para Outlook
-      const dir = [calle, colonia, `${cp} ${municipio}`, 'N.L.'].filter(Boolean).join(', ');
+      const dir = [calle, colonia, cp ? `${cp} ${municipio}` : municipio, 'N.L.'].filter(Boolean).join(', ');
 
-      // Coordenadas: URL de GMaps toma precedencia; si no, usar preview ya cacheado o geocodificar
-      btn.innerHTML = '<span class="sp"></span> Geocodificando…';
-      let loc = null;
-      if (url) {
-        loc = await resolveLocation({ url });
-        if (loc?.error === 'low_zoom_search') {
-          alert(`La URL tiene zoom muy alejado (${loc.zoom || '?'}×). Abre el pin del lugar en Google Maps y copia esa URL.`);
+      // Coordenadas: reusar _ncGeoResult del preview en vivo (URL o geocoder)
+      btn.innerHTML = '<span class="sp"></span> Guardando…';
+      let loc = _ncGeoResult?.lat != null ? _ncGeoResult : null;
+
+      // Si el preview no corrió (usuario no pegó URL ni hizo blur), intentar ahora
+      if (!loc && url) {
+        const r = await resolveLocation({ url });
+        if (r?.error === 'low_zoom_search') {
+          alert(`La URL tiene zoom muy alejado. Abre el pin del lugar en Google Maps y copia esa URL.`);
           throw new Error('URL imprecisa');
         }
-        if (loc?.error === 'short_url_unresolved') {
-          alert('No se pudo resolver el enlace corto. Intenta con la URL larga de Google Maps.');
-          throw new Error('URL corta no resoluble');
-        }
-      }
-      // Si no hay URL, reusar el resultado del preview (ya geocodificado en live)
-      if (!loc || loc.lat == null) {
-        if (_ncGeoResult?.lat != null) {
-          loc = _ncGeoResult;
-        } else {
-          // Preview no corrió todavía — geocodificar ahora
-          try {
-            const g = await api.geocode.search({
-              structured: { street: calle, city: municipio, postalcode: cp, state: 'Nuevo León' },
-            });
-            if (g?.lat != null) {
-              loc = { lat: g.lat, lng: g.lng, source: g.source === 'cache' ? 'cache:nominatim' : 'nominatim_structured', confidence: g.confidence || 'medium', verified: false };
-            }
-          } catch (_) { /* sin coords — el mapa lo intentará en background */ }
-        }
+        loc = r?.lat != null ? r : null;
       }
 
       const row = await api.clientes.create({

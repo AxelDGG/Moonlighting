@@ -465,8 +465,7 @@
                 <div class="fi"><label>Teléfono *</label><input id="nc-t" type="tel" placeholder="+52 81 …"/></div>
                 <div class="fi full">
                   <label>Calle y número *</label>
-                  <input id="nc-calle" type="text" placeholder="Pedregal de La Cascada 6769"
-                    onblur="triggerNcGeoPreview()"/>
+                  <input id="nc-calle" type="text" placeholder="Pedregal de La Cascada 6769"/>
                 </div>
                 <div class="fi">
                   <label>Colonia <span style="font-size:10px;font-weight:400;color:var(--mu)">(opcional)</span></label>
@@ -474,21 +473,17 @@
                 </div>
                 <div class="fi">
                   <label>Municipio *</label>
-                  <select id="nc-muni" onchange="triggerNcGeoPreview()">
+                  <select id="nc-muni">
                     <option value="">— Seleccionar —</option>
                   </select>
                 </div>
-                <div class="fi">
-                  <label>Código postal *</label>
-                  <input id="nc-cp" type="text" inputmode="numeric" maxlength="5" placeholder="64898"
-                    onblur="triggerNcGeoPreview()"/>
-                </div>
                 <div class="fi full">
-                  <label style="display:flex;align-items:center;gap:5px">
-                    URL de Google Maps
-                    <span style="font-size:10px;font-weight:400;color:var(--mu)">(toma precedencia — recomendada si el geocoder falla)</span>
+                  <label style="display:flex;align-items:center;gap:6px">
+                    <i data-lucide="map-pin" style="width:12px;height:12px;color:var(--p)"></i>
+                    Ubicación — URL de Google Maps
+                    <span style="font-size:10px;font-weight:400;color:var(--mu)">Abre Google Maps → Compartir → Copiar enlace</span>
                   </label>
-                  <input id="nc-url" type="url" placeholder="https://maps.app.goo.gl/... o URL larga" style="font-size:12px"
+                  <input id="nc-url" type="url" placeholder="https://maps.app.goo.gl/..." style="font-size:13px"
                     oninput="onNcUrlInput()"/>
                 </div>
                 <!-- Preview de geocodificación en vivo -->
@@ -496,8 +491,8 @@
                 <!-- Mini mapa de confirmación -->
                 <div id="nc-map-wrap" style="display:none" class="fi full">
                   <label style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
-                    <i data-lucide="map-pin" style="width:12px;height:12px;color:var(--p)"></i>
-                    Confirma el pin — <span style="font-weight:400;color:var(--mu)">puedes arrastrarlo para corregir</span>
+                    <i data-lucide="check-circle-2" style="width:12px;height:12px;color:#22c55e"></i>
+                    Ubicación confirmada — <span style="font-weight:400;color:var(--mu)">arrastra el pin si necesitas corregir</span>
                   </label>
                   <div id="nc-map" style="height:200px;border-radius:10px;border:1px solid var(--bo);overflow:hidden"></div>
                 </div>
