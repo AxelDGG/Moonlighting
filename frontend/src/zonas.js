@@ -12,51 +12,52 @@
 
 export const ZONAS_POR_MUNICIPIO = {
   'Monterrey': [
-    { zona: 'Norte',  cp: [[64200, 64390]] },
-    { zona: 'Centro', cp: [[64000, 64190]] },
-    { zona: 'Sur',    cp: [[64700, 64990]] },
+    // Norte cubre Mitras, Cumbres, Del Valle, Del Paseo, Valle Oriente (64200-64699)
+    { zona: 'Norte',  cp: [[64200, 64699]] },
+    { zona: 'Centro', cp: [[64000, 64199]] },
+    { zona: 'Sur',    cp: [[64700, 64999]] },
   ],
   'Santa Catarina': [
-    { zona: 'Oriente', cp: [[66100, 66150]] },
-    { zona: 'Poniente', cp: [[66350, 66380]] },
+    { zona: 'Oriente', cp: [[66100, 66249]] },
+    { zona: 'Poniente', cp: [[66250, 66399]] },
   ],
   'San Pedro Garza García': [
-    { zona: 'Oriente', cp: [[66220, 66240]] },
-    { zona: 'Poniente', cp: [[66250, 66280]] },
+    { zona: 'Oriente', cp: [[66200, 66249]] },
+    { zona: 'Poniente', cp: [[66250, 66299]] },
   ],
   'Guadalupe': [
-    { zona: 'Poniente', cp: [[67100, 67170]] },
-    { zona: 'Oriente', cp: [[67200, 67290]] },
+    { zona: 'Poniente', cp: [[67100, 67199]] },
+    { zona: 'Oriente', cp: [[67200, 67299]] },
   ],
   'San Nicolás de los Garza': [
     { zona: 'Poniente', cp: [[66400, 66450]] },
-    { zona: 'Oriente', cp: [[66460, 66490]] },
+    { zona: 'Oriente', cp: [[66451, 66499]] },
   ],
   'General Escobedo': [
-    { zona: 'Sur',   cp: [[66050, 66070]] },
-    { zona: 'Norte', cp: [[66080, 66090]] },
+    { zona: 'Sur',   cp: [[66050, 66074]] },
+    { zona: 'Norte', cp: [[66075, 66099]] },
   ],
   'Apodaca': [
     { zona: 'Poniente', cp: [[66600, 66630]] },
-    { zona: 'Centro',   cp: [[66640, 66649]] },
-    { zona: 'Oriente',  cp: [[66650, 66659], [66670, 66699]] },
+    { zona: 'Centro',   cp: [[66631, 66649]] },
+    { zona: 'Oriente',  cp: [[66650, 66699]] },
   ],
   'García': [
-    { zona: 'Oriente', cp: [[66000, 66010]] },
-    { zona: 'Centro',  cp: [[66020, 66030]] },
-    { zona: 'Poniente', cp: [[66035, 66049]] },
+    { zona: 'Oriente',  cp: [[66000, 66015]] },
+    { zona: 'Centro',   cp: [[66016, 66034]] },
+    { zona: 'Poniente', cp: [[66035, 66059]] },
   ],
   'Juárez': [
-    { zona: 'Poniente', cp: [[67250, 67260]] },
-    { zona: 'Oriente',  cp: [[67270, 67290]] },
+    { zona: 'Poniente', cp: [[67250, 67264]] },
+    { zona: 'Oriente',  cp: [[67265, 67299]] },
   ],
   'Pesquería': [
-    { zona: 'Poniente', cp: [[66650, 66660]] },
-    { zona: 'Oriente',  cp: [[66670, 66699]] },
+    { zona: 'Poniente', cp: [[66700, 66749]] },
+    { zona: 'Oriente',  cp: [[66750, 66799]] },
   ],
   'Cadereyta Jiménez': [
-    { zona: 'Poniente', cp: [[67480, 67490]] },
-    { zona: 'Centro',   cp: [[67450, 67470]] },
+    { zona: 'Poniente', cp: [[67450, 67479]] },
+    { zona: 'Centro',   cp: [[67480, 67499]] },
     { zona: 'Oriente',  cp: [[67500, 67599]] },
   ],
 };
@@ -107,27 +108,45 @@ export function parseGoogleMapsUrl(url) {
     return null;
   }
 
-  // 1) Patrón @lat,lng
-  let lat = null, lng = null;
-  const atMatch = u.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-  if (atMatch) {
-    lat = parseFloat(atMatch[1]);
-    lng = parseFloat(atMatch[2]);
+  // Orden de preferencia por precisión:
+  //   1) !3d<lat>!4d<lng>  → coordenada exacta del lugar (siempre precisa)
+  //   2) ?q=lat,lng o &query=lat,lng → coordenada explícita del query
+  //   3) @lat,lng,<zoom>z  → centro del viewport; solo es precisa a nivel calle
+  //      (zoom ≥ 17). En /maps/search/ con zoom bajo esto es la vista general,
+  //      no la ubicación real → se rechaza.
+  let lat = null, lng = null, precision = null;
+
+  // 1) !3d!4d — coord exacta del lugar (URLs /maps/place/)
+  const dMatch = u.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (dMatch) {
+    lat = parseFloat(dMatch[1]);
+    lng = parseFloat(dMatch[2]);
+    precision = 'place';
   }
-  // 2) !3d<lat>!4d<lng>
+
+  // 2) query=lat,lng — coord explícita
   if (lat == null || lng == null) {
-    const dMatch = u.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-    if (dMatch) {
-      lat = parseFloat(dMatch[1]);
-      lng = parseFloat(dMatch[2]);
-    }
-  }
-  // 3) query=lat,lng
-  if (lat == null || lng == null) {
-    const qMatch = u.match(/[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    const qMatch = u.match(/[?&](?:q|query)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
     if (qMatch) {
       lat = parseFloat(qMatch[1]);
       lng = parseFloat(qMatch[2]);
+      precision = 'query';
+    }
+  }
+
+  // 3) @lat,lng,<zoom>z — aceptar solo con zoom de calle
+  if (lat == null || lng == null) {
+    const atMatch = u.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?)z)?/);
+    if (atMatch) {
+      const zoom = atMatch[3] ? parseFloat(atMatch[3]) : null;
+      if (zoom == null || zoom >= 17) {
+        lat = parseFloat(atMatch[1]);
+        lng = parseFloat(atMatch[2]);
+        precision = 'viewport';
+      } else {
+        // Viewport center con zoom bajo → no es confiable
+        return { error: 'low_zoom_search', zoom };
+      }
     }
   }
 
@@ -155,7 +174,7 @@ export function parseGoogleMapsUrl(url) {
     }
   }
 
-  return { lat, lng, cp, place, municipio };
+  return { lat, lng, cp, place, municipio, precision };
 }
 
 /**
