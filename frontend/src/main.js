@@ -17,7 +17,7 @@ import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcI
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
 import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
-import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile } from './modules/configuracion.js';
+import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile, cfgAddVehiculo, cfgDeleteVehiculo } from './modules/configuracion.js';
 
 /* ── TAB TITLES ── */
 const TAB_TITLES = {
@@ -344,6 +344,8 @@ window.renderConfiguracion = renderConfiguracion;
 window.saveUserProfile     = saveUserProfile;
 window.addUserProfile      = addUserProfile;
 window.deleteUserProfile   = deleteUserProfile;
+window.cfgAddVehiculo      = cfgAddVehiculo;
+window.cfgDeleteVehiculo   = cfgDeleteVehiculo;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();

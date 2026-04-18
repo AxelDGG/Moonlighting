@@ -101,12 +101,16 @@ export default async function userProfilesRoutes(fastify) {
       .from('user_profiles').select('role').eq('id', req.user.id).single();
     if (!me || me.role !== 'admin') return reply.code(403).send({ error: 'Sin acceso' });
 
-    // Buscar el usuario en auth.users por email
-    const { data: authUsers, error: authErr } = await fastify.supabase.auth.admin.listUsers();
-    if (authErr) return reply.code(500).send({ error: 'Error al buscar usuario' });
-
-    const targetUser = authUsers.users.find(u => u.email === req.body.email);
-    if (!targetUser) return reply.code(404).send({ error: 'Usuario no encontrado en auth. Debe crearse primero en Supabase.' });
+    // Buscar el usuario en auth.users por email vía RPC (O(1) con índice único).
+    // Evita supabase.auth.admin.listUsers(), que en algunos proyectos falla con
+    // "Database error finding users" desde GoTrue y además pagina (solo 50 users).
+    const { data: uid, error: authErr } = await fastify.supabase
+      .rpc('find_user_id_by_email', { p_email: req.body.email });
+    if (authErr) {
+      req.log.error({ err: authErr }, 'find_user_id_by_email failed');
+      return reply.code(500).send({ error: 'Error al buscar usuario', details: authErr.message });
+    }
+    if (!uid) return reply.code(404).send({ error: 'Usuario no encontrado en auth. Debe registrarse primero en Supabase.' });
 
     const role = req.body.role || 'gestor';
     const permissions = req.body.permissions || (
@@ -116,7 +120,7 @@ export default async function userProfilesRoutes(fastify) {
         ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
         : {});
 
-    const upsertData = { id: targetUser.id, email: req.body.email, role, permissions };
+    const upsertData = { id: uid, email: req.body.email, role, permissions };
     if (req.body.tecnico_id != null) upsertData.tecnico_id = req.body.tecnico_id;
     const { data, error } = await fastify.supabase
       .from('user_profiles')
