@@ -59,6 +59,36 @@ function showTab(name) {
 }
 
 /* ── APPLY ROLE RESTRICTIONS ── */
+// Preflight: se ejecuta ANTES de showApp() para evitar flash del UI completo
+// mientras loadAll() está corriendo. Solo necesita el profile, no depende de
+// state.tecnicos/pedidos (eso se usa en applyRoleRestrictions después).
+function applyRolePreflight() {
+  const profile = state.userProfile;
+  if (!profile) return;
+  const hide = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  };
+  const show = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  };
+
+  if (profile.role === 'tecnico') {
+    ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
+    show('nav-tecnico');
+    document.getElementById('nav-tecnico')?.classList.add('active');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-tecnico')?.classList.add('active');
+    const ptitle = document.getElementById('ptitle');
+    if (ptitle) ptitle.textContent = TAB_TITLES.tecnico;
+    return;
+  }
+
+  // Para gestor y admin: ocultar Configuración por defecto (admin la reactiva en applyRoleRestrictions)
+  if (profile.role !== 'admin') hide('nav-configuracion');
+}
+
 function applyRoleRestrictions() {
   const profile = state.userProfile;
   if (!profile) return;
@@ -192,6 +222,7 @@ async function doLogin(e) {
     const user  = await login(email, pass);
     document.getElementById('user-email').textContent = user.email;
     await loadUserProfile();
+    applyRolePreflight();
     showApp();
     await loadAll();
     applyRoleRestrictions();
@@ -236,6 +267,7 @@ async function init() {
   if (user) {
     document.getElementById('user-email').textContent = user.email;
     await loadUserProfile();
+    applyRolePreflight();
     showApp();
     await loadAll();
     applyRoleRestrictions();
