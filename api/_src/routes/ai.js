@@ -106,15 +106,18 @@ async function executeTool(toolName, args, supabase) {
   }
 
   if (toolName === 'query_orders_today') {
-    // Use the same view as the existing GET /pedidos endpoint
-    // fecha_servicio is a DATE column (YYYY-MM-DD), no timestamp suffix needed
     const fecha = args.fecha || new Date().toLocaleDateString('sv', { timeZone: 'America/Monterrey' });
+    // Use gte/lt range to match both DATE and TIMESTAMP columns
+    const nextDay = new Date(fecha);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const fechaSiguiente = nextDay.toISOString().slice(0, 10);
     const { data, error } = await supabase
       .from('v_pedidos_resumen')
       .select('*')
-      .eq('fecha_servicio', fecha)
+      .gte('fecha_servicio', fecha)
+      .lt('fecha_servicio', fechaSiguiente)
       .order('fecha_servicio');
-    if (error) return { error: 'No se pudieron consultar los pedidos' };
+    if (error) return { error: `No se pudieron consultar los pedidos: ${error.message}` };
     if (!data || data.length === 0) return { resultado: `No hay pedidos con fecha de servicio el ${fecha}.` };
     return {
       fecha,

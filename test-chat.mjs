@@ -138,7 +138,7 @@ console.log('\nTest 4 — orders tool uses view and correct date format');
 assert('orders uses v_pedidos_resumen view', aiSrc.includes("from('v_pedidos_resumen')"));
 assert('orders does NOT use nested select estados_pedido(nombre)', !aiSrc.includes("estados_pedido(nombre)"));
 assert('orders does NOT append T00:00:00 to fecha_servicio', !aiSrc.includes('fecha}T00:00:00'));
-assert('orders uses .eq for date (DATE column)', aiSrc.includes(".eq('fecha_servicio', fecha)"));
+assert('orders uses gte/lt range (works for DATE and TIMESTAMP)', aiSrc.includes(".gte('fecha_servicio', fecha)") && aiSrc.includes(".lt('fecha_servicio', fechaSiguiente)"));
 assert('orders_by_status resolves estado name to ID via estados_pedido table', aiSrc.includes("from('estados_pedido')"));
 
 /* ══════════════════════════════════════════════════════════════
