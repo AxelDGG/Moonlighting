@@ -53,7 +53,9 @@ frontend/
     ui.js         toast, loader, overlay helpers, badge
     constants.js  TIPO_IC, TIPO_BG and other shared constants
     utils.js      money, esc, fdateShort, mdToHtml
-    modules/      dashboard, clientes, pedidos, calendar, mapa, tracking, metricas, tecnicos, almacenamiento
+    geocoding.js  resuelve direcciones vía /api/geocode; normaliza municipio/CP/lat-lng
+    icons.js      wrapper de Lucide — expone refreshIcons(root) tras innerHTML
+    modules/      dashboard, clientes, pedidos, calendar, mapa, tracking, metricas, tecnicos, almacenamiento, configuracion, tecnico_view
 ```
 
 ### Request flow
@@ -160,7 +162,7 @@ CORS also reads `process.env.VERCEL_URL` to allow Vercel preview deployment URLs
 - `clientes` — customers with geocoords and payment method
 - `pedidos` — orders with `cliente_id` FK, `tipo_servicio`, `detalles` (JSONB)
 - `servicios` — canonical service records (tabla nueva, alimenta `v_servicios_resumen`)
-- `servicios_metricas` — legacy tracking (usada por `openTrackModal` y dashboard de métricas). Se mantiene hasta migrar el tracking a `servicios`. **Todo write nuevo de tracking (hora_programada/llegada/inicio/fin, motivo_retraso, estado) va aquí.**
+- `servicios_metricas` — legacy tracking (usada por `openTrackModal` y dashboard de métricas). Se mantiene hasta migrar el tracking a `servicios`. **Todo write nuevo de tracking (hora_programada/llegada/inicio/fin, motivo_retraso, estado) va aquí.** La columna `tecnico` se guarda como **string (nombre del técnico)**, no FK a `tecnicos.id`. La validación de ownership hace el join `user_profiles.tecnico_id` → `tecnicos.nombre` → `servicios_metricas.tecnico`.
 - `user_profiles` — rol (`admin`/`gestor`/`tecnico`) y permisos por usuario. Tiene RLS: cada usuario solo lee su propia fila; mutaciones solo vía API con service_role.
 
 ### Autorización por rol
@@ -177,6 +179,12 @@ Para restringir por rol: `fastify.requireRole([...])` devuelve un `preHandler`. 
 ### Migraciones
 
 Ver `db/migrations/README.md`. Se aplican manualmente en Supabase SQL editor; Vercel no corre migraciones en deploy. Archivos nombrados `YYYYMMDD_descripcion.sql`.
+
+### Documentos de referencia
+
+- `DATABASE_SCHEMA.md` — diseño normalizado (17+ tablas). Fuente de verdad del schema objetivo.
+- `RESTRUCTURING_PROGRESS.md` — changelog de la migración del schema monolítico al normalizado. Historia, no estado actual.
+- `db/migrations/README.md` — proceso manual de aplicación de migraciones y estado del repo vs Supabase.
 
 ### CSS conventions
 
