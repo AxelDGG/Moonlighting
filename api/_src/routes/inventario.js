@@ -28,6 +28,7 @@ const movimientoSchema = {
 
 export default async function inventarioRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   // GET /existencias - Listar existencias consolidadas
   fastify.get('/existencias', async (req, reply) => {
@@ -60,6 +61,7 @@ export default async function inventarioRoutes(fastify) {
 
   // POST /existencias - Crear/actualizar existencia
   fastify.post('/existencias', {
+    preHandler: mutate,
     schema: { body: existenciasSchema },
   }, async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -67,7 +69,10 @@ export default async function inventarioRoutes(fastify) {
       .upsert(req.body, { onConflict: 'item_catalogo_id,ubicacion_id' })
       .select()
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al actualizar existencia', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'inventario_existencias upsert failed');
+      return reply.code(500).send({ error: 'Error al actualizar existencia' });
+    }
     return reply.code(201).send(data);
   });
 
@@ -97,6 +102,7 @@ export default async function inventarioRoutes(fastify) {
 
   // POST /movimientos - Registrar movimiento
   fastify.post('/movimientos', {
+    preHandler: mutate,
     schema: { body: movimientoSchema },
   }, async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -121,6 +127,7 @@ export default async function inventarioRoutes(fastify) {
 
   // POST /ubicaciones - Crear ubicación
   fastify.post('/ubicaciones', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       body: {
         type: 'object',

@@ -13,6 +13,7 @@ const bodySchema = {
 
 export default async function almacenamientoRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   fastify.get('/', async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -22,6 +23,7 @@ export default async function almacenamientoRoutes(fastify) {
   });
 
   fastify.post('/', {
+    preHandler: mutate,
     schema: { body: { ...bodySchema, required: ['modelo', 'categoria', 'lugar', 'cantidad', 'precio'] } },
   }, async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -31,6 +33,7 @@ export default async function almacenamientoRoutes(fastify) {
   });
 
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: bodySchema,
@@ -43,6 +46,7 @@ export default async function almacenamientoRoutes(fastify) {
   });
 
   fastify.delete('/:id', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

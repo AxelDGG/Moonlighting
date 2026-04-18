@@ -53,6 +53,7 @@ export default async function tecnicosRoutes(fastify) {
 
   // POST / - Crear técnico
   fastify.post('/', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       body: {
         ...tecnicoBodySchema,
@@ -65,12 +66,16 @@ export default async function tecnicosRoutes(fastify) {
       .insert(req.body)
       .select()
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al crear técnico', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'tecnicos insert failed');
+      return reply.code(500).send({ error: 'Error al crear técnico' });
+    }
     return reply.code(201).send(data);
   });
 
   // PUT /:id - Actualizar técnico
   fastify.put('/:id', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: tecnicoBodySchema,
@@ -86,6 +91,7 @@ export default async function tecnicosRoutes(fastify) {
 
   // DELETE /:id - Desactivar técnico (no borrar)
   fastify.delete('/:id', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

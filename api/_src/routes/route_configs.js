@@ -15,6 +15,7 @@ const bodySchema = {
 
 export default async function routeConfigsRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   // GET / - Listar configs (opcionalmente filtrar por técnico)
   fastify.get('/', async (req, reply) => {
@@ -31,18 +32,22 @@ export default async function routeConfigsRoutes(fastify) {
   });
 
   // POST / - Crear config
-  fastify.post('/', { schema: { body: bodySchema } }, async (req, reply) => {
+  fastify.post('/', { preHandler: mutate, schema: { body: bodySchema } }, async (req, reply) => {
     const { data, error } = await fastify.supabase
       .from('route_configs')
       .insert(req.body)
       .select('*, tecnicos(id, nombre)')
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al crear configuración', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'route_configs insert failed');
+      return reply.code(500).send({ error: 'Error al crear configuración' });
+    }
     return reply.code(201).send(data);
   });
 
   // PUT /:id - Actualizar config
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: bodySchema,
@@ -58,6 +63,7 @@ export default async function routeConfigsRoutes(fastify) {
 
   // DELETE /:id - Eliminar config
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const { error } = await fastify.supabase

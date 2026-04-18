@@ -44,10 +44,23 @@ async function _deductFromVehicle(sm, pedido) {
 export async function openTrackModal(pedidoId) {
   const p = state.pedidos.find(x => x.id === pedidoId); if (!p) return;
   const c = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
+
+  // Guardia frontend: técnicos solo pueden abrir seguimiento de pedidos
+  // asignados a ellos. El backend vuelve a validar vía API.
+  const profile = state.userProfile;
+  if (profile?.role === 'tecnico') {
+    const existing = state.servicios_metricas.find(s => s.pedido_id === pedidoId);
+    const miNombre = state._tecnicoNombre;
+    if (!miNombre || (existing && existing.tecnico && existing.tecnico !== miNombre)) {
+      toast('No puedes modificar este servicio', 'er');
+      return;
+    }
+  }
+
   let sm = state.servicios_metricas.find(s => s.pedido_id === pedidoId);
   if (!sm) {
     try {
-      const row = await api.metricas.create({ pedido_id: pedidoId, tecnico: '', hora_programada: null, zona: c?.municipio || '', orden_ruta: null, estado: 'programado', dia_semana: getDiaSemana(p.fecha) });
+      const row = await api.metricas.create({ pedido_id: pedidoId, tecnico: profile?.role === 'tecnico' ? (state._tecnicoNombre || '') : '', hora_programada: null, zona: c?.municipio || '', orden_ruta: null, estado: 'programado', dia_semana: getDiaSemana(p.fecha) });
       sm = smFromDb(row);
       state.servicios_metricas.push(sm);
     } catch (err) { toast('Error: ' + err.message, 'er'); return; }

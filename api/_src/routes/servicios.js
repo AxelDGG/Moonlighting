@@ -23,6 +23,21 @@ const servicioBodySchema = {
 
 export default async function serviciosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const tecnicoOwnedMutate = async (req, reply) => {
+    const role = req.profile?.role;
+    if (role === 'admin' || role === 'gestor') return;
+    if (role !== 'tecnico') return reply.code(403).send({ error: 'Sin acceso' });
+    const tecnicoId = req.profile?.tecnico_id;
+    if (!tecnicoId) return reply.code(403).send({ error: 'Sin acceso' });
+    const id = req.params?.id;
+    if (!id) return reply.code(403).send({ error: 'Sin acceso' });
+    const { data } = await fastify.supabase
+      .from('servicios').select('tecnico_id, tecnico_apoyo_id').eq('id', id).single();
+    if (!data || (data.tecnico_id !== tecnicoId && data.tecnico_apoyo_id !== tecnicoId)) {
+      return reply.code(403).send({ error: 'Sin acceso' });
+    }
+  };
 
   // GET / - Listar servicios con resumen
   fastify.get('/', async (req, reply) => {
@@ -57,6 +72,7 @@ export default async function serviciosRoutes(fastify) {
 
   // POST / - Crear servicio
   fastify.post('/', {
+    preHandler: mutate,
     schema: {
       body: {
         ...servicioBodySchema,
@@ -69,12 +85,16 @@ export default async function serviciosRoutes(fastify) {
       .insert(req.body)
       .select()
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al crear servicio', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'servicios insert failed');
+      return reply.code(500).send({ error: 'Error al crear servicio' });
+    }
     return reply.code(201).send(data);
   });
 
   // PUT /:id - Actualizar servicio
   fastify.put('/:id', {
+    preHandler: tecnicoOwnedMutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: servicioBodySchema,
@@ -90,6 +110,7 @@ export default async function serviciosRoutes(fastify) {
 
   // DELETE /:id - Cambiar estado a cancelado
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

@@ -22,6 +22,37 @@ const bodySchema = {
 
 export default async function metricasRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor', 'tecnico']);
+
+  // Si el usuario es técnico, solo puede modificar métricas donde el nombre del
+  // técnico asignado coincide con el suyo (desde user_profiles.tecnico_id → tecnicos.nombre).
+  async function enforceTecnicoOwnership(req, reply) {
+    const role = req.profile?.role;
+    if (role === 'admin' || role === 'gestor') return;
+    if (role !== 'tecnico') return reply.code(403).send({ error: 'Sin acceso' });
+
+    const tecnicoId = req.profile?.tecnico_id;
+    if (!tecnicoId) return reply.code(403).send({ error: 'Sin acceso' });
+
+    const { data: tec } = await fastify.supabase
+      .from('tecnicos').select('nombre').eq('id', tecnicoId).single();
+    const miNombre = tec?.nombre;
+    if (!miNombre) return reply.code(403).send({ error: 'Sin acceso' });
+
+    if (req.method === 'POST') {
+      if (req.body?.tecnico && req.body.tecnico !== miNombre) {
+        return reply.code(403).send({ error: 'Sin acceso' });
+      }
+      return;
+    }
+    if (req.params?.id) {
+      const { data: sm } = await fastify.supabase
+        .from('servicios_metricas').select('tecnico').eq('id', req.params.id).single();
+      if (!sm || (sm.tecnico && sm.tecnico !== miNombre)) {
+        return reply.code(403).send({ error: 'Sin acceso' });
+      }
+    }
+  }
 
   fastify.get('/', async (req, reply) => {
     const { data, error } = await fastify.supabase.from('servicios_metricas').select('*').order('id');
@@ -30,6 +61,7 @@ export default async function metricasRoutes(fastify) {
   });
 
   fastify.post('/', {
+    preHandler: [mutate, enforceTecnicoOwnership],
     schema: { body: { ...bodySchema, required: ['pedido_id'] } },
   }, async (req, reply) => {
     const { data, error } = await fastify.supabase.from('servicios_metricas').insert(req.body).select().single();
@@ -38,6 +70,7 @@ export default async function metricasRoutes(fastify) {
   });
 
   fastify.put('/:id', {
+    preHandler: [mutate, enforceTecnicoOwnership],
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: bodySchema,

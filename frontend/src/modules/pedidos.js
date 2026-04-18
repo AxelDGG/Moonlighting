@@ -262,6 +262,25 @@ export function toggleShowCancelled() {
 const COSTO_DESINS_UD      = 100; // $100 por abanico a desinstalar
 const COSTO_TRASLADO_DEFAULT = 0; // traslado fijo por defecto
 
+// ── CLIENT DROPDOWN ──────────────────────────────────────────────────────────
+// Repuebla #p-ce leyendo state.clientes (ordenado por nombre). Seguro de llamar
+// aunque el modal no esté abierto — retorna silenciosamente si el elemento no existe.
+export function refreshClientesDropdown() {
+  const sel = document.getElementById('p-ce');
+  if (!sel) return;
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">— Sin cliente —</option>';
+  [...state.clientes]
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+    .forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = `${c.nombre} (#${c.id})`;
+      sel.appendChild(o);
+    });
+  if (currentVal) sel.value = currentVal;
+}
+
 // ── CLIENT MODE ──────────────────────────────────────────────────────────────
 export function setCliMode(m) {
   cliMode = m;
@@ -482,14 +501,7 @@ export function openPedidoModal(id = null) {
   const mi = document.getElementById('modelo-info'); if (mi) mi.innerHTML = '';
   const ti = document.getElementById('tela-info');   if (ti) ti.innerHTML = '';
   setCliMode('ex');
-  const sel = document.getElementById('p-ce');
-  sel.innerHTML = '<option value="">— Sin cliente —</option>';
-  state.clientes.forEach(c => {
-    const o = document.createElement('option');
-    o.value = c.id;
-    o.textContent = `${c.nombre} (#${c.id})`;
-    sel.appendChild(o);
-  });
+  refreshClientesDropdown();
   // Populate technicians from DB (with fallback to constants)
   const tecSel = document.getElementById('p-tecnico');
   tecSel.innerHTML = '<option value="">— Ninguno —</option>';
@@ -624,6 +636,7 @@ export async function submitPedido(e) {
       });
       const nc = cFromDb(row);
       state.clientes.push(nc);
+      refreshClientesDropdown();
       clienteId = nc.id;
       toast(`Cliente creado: ${nombre} · ${municipio} ${zona}`);
     } else {

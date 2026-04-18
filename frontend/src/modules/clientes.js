@@ -6,6 +6,7 @@ import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { updateMapMarkers } from './mapa.js';
+import { refreshClientesDropdown } from './pedidos.js';
 import { resolveLocation } from '../geocoding.js';
 
 let _showInactive = false;
@@ -84,6 +85,7 @@ export async function submitCliente(e) {
   try {
     await api.clientes.update(id, cToDb(updated));
     state.clientes[ci] = updated;
+    refreshClientesDropdown();
     toast('Cliente actualizado');
     renderClientes(); renderDash(); closeOv('ov-cli');
     if (addressChanged) updateMapMarkers();

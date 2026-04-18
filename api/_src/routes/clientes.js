@@ -33,6 +33,7 @@ const direccionSchema = {
 
 export default async function clientesRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   // GET / - Listar clientes (activos por defecto; ?include_inactive=true para ver todos)
   fastify.get('/', async (req, reply) => {
@@ -60,7 +61,7 @@ export default async function clientesRoutes(fastify) {
   });
 
   // POST / - Crear cliente (acepta formato legacy plano O nuevo anidado)
-  fastify.post('/', async (req, reply) => {
+  fastify.post('/', { preHandler: mutate }, async (req, reply) => {
     const body = req.body || {};
 
     // Formato legacy: { nombre, numero, direccion, municipio, lat, lng, metodo_pago, ... }
@@ -87,7 +88,10 @@ export default async function clientesRoutes(fastify) {
       };
       const { data, error } = await fastify.supabase
         .from('clientes').insert(clienteRow).select().single();
-      if (error) return reply.code(500).send({ error: 'Error al crear cliente', details: error.message });
+      if (error) {
+        req.log.error({ err: error }, 'clientes insert failed');
+        return reply.code(500).send({ error: 'Error al crear cliente' });
+      }
       return reply.code(201).send(data);
     }
 
@@ -113,6 +117,7 @@ export default async function clientesRoutes(fastify) {
 
   // PUT /:id - Actualizar cliente (acepta legacy + nuevo)
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const body = req.body || {};
@@ -151,6 +156,7 @@ export default async function clientesRoutes(fastify) {
 
   // DELETE /:id - Soft delete (activo = false)
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const clienteId = req.params.id;
@@ -161,6 +167,7 @@ export default async function clientesRoutes(fastify) {
 
   // POST /:id/direcciones - Agregar dirección
   fastify.post('/:id/direcciones', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: direccionSchema,

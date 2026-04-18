@@ -133,44 +133,53 @@ function applyRoleRestrictions() {
 /* ── LOAD ALL DATA ── */
 async function loadAll() {
   setLoader(true, 'Cargando datos…');
+  const errores = [];
   try {
-    const [clientes, pedidos] = await Promise.all([
+    const [clientesR, pedidosR, metricasR, almacenR, tecnicosR, routesR, vehiR] = await Promise.allSettled([
       api.clientes.getAll(),
       api.pedidos.getAll(),
+      api.metricas.getAll(),
+      api.almacenamiento.getAll(),
+      api.tecnicos.getAll(),
+      api.routeConfigs.getAll(),
+      api.vehiculos.getAll(),
     ]);
-    state.clientes = clientes.map(cFromDb);
-    state.pedidos  = pedidos.map(pFromDb);
-    setDbStatus(true);
+
+    if (clientesR.status === 'fulfilled') state.clientes = clientesR.value.map(cFromDb);
+    else { state.clientes = []; errores.push('clientes'); }
+
+    if (pedidosR.status === 'fulfilled') state.pedidos = pedidosR.value.map(pFromDb);
+    else { state.pedidos = []; errores.push('pedidos'); }
+
+    if (metricasR.status === 'fulfilled') state.servicios_metricas = metricasR.value.map(smFromDb);
+    else state.servicios_metricas = [];
+
+    if (almacenR.status === 'fulfilled') state.almacenamiento = almacenR.value.map(aFromDb);
+    else state.almacenamiento = [];
+
+    if (tecnicosR.status === 'fulfilled') state.tecnicos = tecnicosR.value;
+    else state.tecnicos = [];
+
+    if (routesR.status === 'fulfilled') state.routeConfigs = routesR.value;
+    else state.routeConfigs = [];
+
+    if (vehiR.status === 'fulfilled') state.vehiculos = vehiR.value;
+    else state.vehiculos = [];
+
+    // Éxito parcial: mostrar toast específico pero no marcar DB como offline
+    // salvo que fallaran las dos tablas principales.
+    const coreFailed = clientesR.status === 'rejected' && pedidosR.status === 'rejected';
+    if (coreFailed) {
+      toast('Error cargando datos', 'er');
+      setDbStatus(false);
+    } else {
+      setDbStatus(true);
+      if (errores.length) toast('No se cargaron: ' + errores.join(', '), 'er');
+    }
     badge(state.pedidos.length + ' pedidos');
-  } catch (err) {
-    toast('Error cargando datos: ' + err.message, 'er');
-    setDbStatus(false);
   } finally {
     setLoader(false);
   }
-
-  // Carga datos legacy en paralelo — fallan silenciosamente si la tabla no existe
-  try {
-    const metricas = await api.metricas.getAll();
-    state.servicios_metricas = metricas.map(smFromDb);
-  } catch { /* tabla servicios_metricas puede no existir */ }
-
-  try {
-    const almacenamiento = await api.almacenamiento.getAll();
-    state.almacenamiento = almacenamiento.map(aFromDb);
-  } catch { /* tabla almacenamiento puede no existir */ }
-
-  try {
-    state.tecnicos = await api.tecnicos.getAll();
-  } catch { /* tabla tecnicos puede no existir */ }
-
-  try {
-    state.routeConfigs = await api.routeConfigs.getAll();
-  } catch { /* tabla route_configs puede no existir */ }
-
-  try {
-    state.vehiculos = await api.vehiculos.getAll();
-  } catch { /* tabla vehiculos puede no existir */ }
 }
 
 /* ── OUTLOOK SYNC ── */
@@ -219,8 +228,9 @@ async function loadUserProfile() {
   try {
     state.userProfile = await api.userProfiles.me();
   } catch {
-    // Si falla, asumir admin para no bloquear
-    state.userProfile = { role: 'admin', permissions: {} };
+    // Si falla, degradar a rol sin permisos en lugar de escalar a admin.
+    state.userProfile = { role: 'gestor', permissions: { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false } };
+    toast('No se cargó el perfil de usuario; acceso limitado', 'er');
   }
 }
 

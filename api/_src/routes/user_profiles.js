@@ -1,4 +1,8 @@
-const ADMIN_EMAIL = 'axeldegyvesgarcia@gmail.com';
+const { ADMIN_EMAILS: ADMIN_EMAILS_ENV } = process.env;
+const ADMIN_EMAILS = (ADMIN_EMAILS_ENV || '')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
 
 const permissionsSchema = {
   type: 'object',
@@ -26,8 +30,7 @@ export default async function userProfilesRoutes(fastify) {
       .from('user_profiles').select('*').eq('id', userId).single();
 
     if (error && error.code === 'PGRST116') {
-      // No existe — crearlo (admin si es el email principal, gestor si no)
-      const role = userEmail === ADMIN_EMAIL ? 'admin' : 'gestor';
+      const role = ADMIN_EMAILS.includes((userEmail || '').toLowerCase()) ? 'admin' : 'gestor';
       const defaultPerms = role === 'gestor'
         ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
         : role === 'tecnico'
@@ -36,28 +39,35 @@ export default async function userProfilesRoutes(fastify) {
       const { data: created, error: createErr } = await fastify.supabase
         .from('user_profiles').insert({ id: userId, email: userEmail, role, permissions: defaultPerms })
         .select().single();
-      if (createErr) return reply.code(500).send({ error: 'Error al crear perfil' });
+      if (createErr) {
+        req.log.error({ err: createErr }, 'user_profiles create failed');
+        return reply.code(500).send({ error: 'Error al crear perfil' });
+      }
+      fastify.invalidateProfileCache(userId);
       return created;
     }
 
-    if (error) return reply.code(500).send({ error: 'Error al cargar perfil' });
+    if (error) {
+      req.log.error({ err: error }, 'user_profiles select failed');
+      return reply.code(500).send({ error: 'Error al cargar perfil' });
+    }
     return data;
   });
 
   // GET / - Listar todos los perfiles (solo admin)
-  fastify.get('/', async (req, reply) => {
-    const { data: me } = await fastify.supabase
-      .from('user_profiles').select('role').eq('id', req.user.id).single();
-    if (!me || me.role !== 'admin') return reply.code(403).send({ error: 'Sin acceso' });
-
+  fastify.get('/', { preHandler: fastify.requireRole(['admin']) }, async (req, reply) => {
     const { data, error } = await fastify.supabase
       .from('user_profiles').select('*').order('email');
-    if (error) return reply.code(500).send({ error: 'Error al cargar perfiles' });
+    if (error) {
+      req.log.error({ err: error }, 'user_profiles list failed');
+      return reply.code(500).send({ error: 'Error al cargar perfiles' });
+    }
     return data;
   });
 
   // PUT /:id - Actualizar rol y permisos de un usuario (solo admin)
   fastify.put('/:id', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       body: {
@@ -71,18 +81,19 @@ export default async function userProfilesRoutes(fastify) {
       },
     },
   }, async (req, reply) => {
-    const { data: me } = await fastify.supabase
-      .from('user_profiles').select('role').eq('id', req.user.id).single();
-    if (!me || me.role !== 'admin') return reply.code(403).send({ error: 'Sin acceso' });
-
     const { error } = await fastify.supabase
       .from('user_profiles').update(req.body).eq('id', req.params.id);
-    if (error) return reply.code(500).send({ error: 'Error al actualizar perfil' });
+    if (error) {
+      req.log.error({ err: error }, 'user_profiles update failed');
+      return reply.code(500).send({ error: 'Error al actualizar perfil' });
+    }
+    fastify.invalidateProfileCache(req.params.id);
     return reply.code(204).send();
   });
 
   // POST / - Registrar un nuevo perfil para usuario que ya existe en auth.users
   fastify.post('/', {
+    preHandler: fastify.requireRole(['admin']),
     schema: {
       body: {
         type: 'object',
@@ -97,20 +108,13 @@ export default async function userProfilesRoutes(fastify) {
       },
     },
   }, async (req, reply) => {
-    const { data: me } = await fastify.supabase
-      .from('user_profiles').select('role').eq('id', req.user.id).single();
-    if (!me || me.role !== 'admin') return reply.code(403).send({ error: 'Sin acceso' });
-
-    // Buscar el usuario en auth.users por email vía RPC (O(1) con índice único).
-    // Evita supabase.auth.admin.listUsers(), que en algunos proyectos falla con
-    // "Database error finding users" desde GoTrue y además pagina (solo 50 users).
     const { data: uid, error: authErr } = await fastify.supabase
       .rpc('find_user_id_by_email', { p_email: req.body.email });
     if (authErr) {
       req.log.error({ err: authErr }, 'find_user_id_by_email failed');
-      return reply.code(500).send({ error: 'Error al buscar usuario', details: authErr.message });
+      return reply.code(500).send({ error: 'Error al buscar usuario' });
     }
-    if (!uid) return reply.code(404).send({ error: 'Usuario no encontrado en auth. Debe registrarse primero en Supabase.' });
+    if (!uid) return reply.code(404).send({ error: 'Usuario no encontrado. Debe registrarse primero.' });
 
     const role = req.body.role || 'gestor';
     const permissions = req.body.permissions || (
@@ -126,7 +130,11 @@ export default async function userProfilesRoutes(fastify) {
       .from('user_profiles')
       .upsert(upsertData)
       .select().single();
-    if (error) return reply.code(500).send({ error: 'Error al crear perfil', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'user_profiles upsert failed');
+      return reply.code(500).send({ error: 'Error al crear perfil' });
+    }
+    fastify.invalidateProfileCache(uid);
     return reply.code(201).send(data);
   });
 }

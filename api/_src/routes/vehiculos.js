@@ -1,5 +1,6 @@
 export default async function vehiculosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin']);
 
   fastify.get('/', async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -9,6 +10,7 @@ export default async function vehiculosRoutes(fastify) {
   });
 
   fastify.post('/', {
+    preHandler: mutate,
     schema: {
       body: {
         type: 'object',
@@ -27,6 +29,7 @@ export default async function vehiculosRoutes(fastify) {
   });
 
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

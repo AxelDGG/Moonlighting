@@ -36,11 +36,12 @@ Two independent packages — **no npm workspaces** (removed; caused Vercel bundl
 ```
 api/
   index.js        Vercel handler — singleton (let app = null, reused across warm invocations)
-  src/
+  _src/           prefijo "_" indica a Vercel que NO convierta estos archivos en rutas serverless.
+                  El único entrypoint es api/index.js; el resto es código interno.
     config.js     env vars destructured at module top (esbuild constraint — see below)
     app.js        createApp() — registers plugins then routes
     plugins/      cors, helmet, rate-limit, supabase, auth, msgraph
-    routes/       clientes, pedidos, metricas, ai, calendar, tecnicos, pagos, catalogo, servicios, inventario, almacenamiento
+    routes/       clientes, pedidos, metricas, ai, calendar, tecnicos, pagos, catalogo, servicios, inventario, almacenamiento, user_profiles, vehiculos, route_configs, geocode
 
 frontend/
   index.html
@@ -69,7 +70,7 @@ All endpoints require auth — there are no public `/api/*` routes. Each route f
 
 ### Critical Vercel/esbuild constraint
 
-`api/src/config.js` **must** destructure `process.env` at module level before assigning values. Vercel's bundler cannot handle:
+`api/_src/config.js` **must** destructure `process.env` at module level before assigning values. Vercel's bundler cannot handle:
 - `CallExpression` at module level — e.g. `requireEnv('X')`
 - `BinaryExpression` on `process.env` — e.g. `process.env.X || 'default'`
 
@@ -130,6 +131,7 @@ Global: 120 req/min per authenticated user (falls back to IP). Per-route overrid
 | `SUPABASE_SERVICE_KEY` | service_role key (secret) |
 | `GROQ_API_KEY` | Groq LLM API key |
 | `FRONTEND_URL` | Allowed CORS origin |
+| `ADMIN_EMAILS` | Coma-separado. Correos que se auto-provisionan como `admin` al primer login. Sin esta var, todos los nuevos usuarios se crean como `gestor`. |
 | `MS_TENANT_ID` | Azure AD tenant (optional) |
 | `MS_CLIENT_ID` | Azure app client ID (optional) |
 | `MS_CLIENT_SECRET` | Azure app secret (optional) |
@@ -157,7 +159,24 @@ CORS also reads `process.env.VERCEL_URL` to allow Vercel preview deployment URLs
 
 - `clientes` — customers with geocoords and payment method
 - `pedidos` — orders with `cliente_id` FK, `tipo_servicio`, `detalles` (JSONB)
-- `servicios_metricas` — service tracking with timestamps, technician, delay data
+- `servicios` — canonical service records (tabla nueva, alimenta `v_servicios_resumen`)
+- `servicios_metricas` — legacy tracking (usada por `openTrackModal` y dashboard de métricas). Se mantiene hasta migrar el tracking a `servicios`. **Todo write nuevo de tracking (hora_programada/llegada/inicio/fin, motivo_retraso, estado) va aquí.**
+- `user_profiles` — rol (`admin`/`gestor`/`tecnico`) y permisos por usuario. Tiene RLS: cada usuario solo lee su propia fila; mutaciones solo vía API con service_role.
+
+### Autorización por rol
+
+`verifyAuth` (auth plugin) valida el JWT, carga `user_profiles` y lo expone como `request.profile`. Hay caché en memoria por usuario (TTL 60s); se invalida con `fastify.invalidateProfileCache(userId)` tras cualquier update del perfil.
+
+Para restringir por rol: `fastify.requireRole([...])` devuelve un `preHandler`. Uso: `fastify.post('/', { preHandler: fastify.requireRole(['admin', 'gestor']) }, handler)`. Defaults por ruta:
+
+- `tecnicos`, `catalogo`, `vehiculos`, `inventario/ubicaciones` — mutaciones **admin** only
+- `clientes`, `pedidos`, `pagos`, `inventario`, `almacenamiento`, `route_configs` — **admin, gestor**
+- `servicios`, `metricas` — **admin, gestor**; **tecnico** permitido solo sobre su propio pedido (validado contra `user_profiles.tecnico_id`)
+- `user_profiles` — mutaciones **admin** only
+
+### Migraciones
+
+Ver `db/migrations/README.md`. Se aplican manualmente en Supabase SQL editor; Vercel no corre migraciones en deploy. Archivos nombrados `YYYYMMDD_descripcion.sql`.
 
 ### CSS conventions
 

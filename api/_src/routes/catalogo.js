@@ -20,6 +20,7 @@ const itemBodySchema = {
 
 export default async function catalogoRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin']);
 
   // GET / - Listar items del catálogo
   fastify.get('/', async (req, reply) => {
@@ -68,6 +69,7 @@ export default async function catalogoRoutes(fastify) {
 
   // POST / - Crear item de catálogo
   fastify.post('/', {
+    preHandler: mutate,
     schema: {
       body: {
         ...itemBodySchema,
@@ -80,12 +82,16 @@ export default async function catalogoRoutes(fastify) {
       .insert(req.body)
       .select()
       .single();
-    if (error) return reply.code(500).send({ error: 'Error al crear item', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'items_catalogo insert failed');
+      return reply.code(500).send({ error: 'Error al crear item' });
+    }
     return reply.code(201).send(data);
   });
 
   // PUT /:id - Actualizar item
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: itemBodySchema,
@@ -101,6 +107,7 @@ export default async function catalogoRoutes(fastify) {
 
   // DELETE /:id - Desactivar item (no borrar, por historial)
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

@@ -50,6 +50,7 @@ const detalleBodySchema = {
 
 export default async function pedidosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   // GET / - Listar pedidos
   fastify.get('/', async (req, reply) => {
@@ -75,6 +76,7 @@ export default async function pedidosRoutes(fastify) {
 
   // POST / - Crear pedido (acepta legacy + nuevo)
   fastify.post('/', {
+    preHandler: mutate,
     schema: { body: pedidoBodySchema },
   }, async (req, reply) => {
     const body = { ...req.body };
@@ -92,12 +94,16 @@ export default async function pedidosRoutes(fastify) {
 
     const { data, error } = await fastify.supabase
       .from('pedidos').insert(body).select().single();
-    if (error) return reply.code(500).send({ error: 'Error al crear pedido', details: error.message });
+    if (error) {
+      req.log.error({ err: error }, 'pedidos insert failed');
+      return reply.code(500).send({ error: 'Error al crear pedido' });
+    }
     return reply.code(201).send(data);
   });
 
   // PUT /:id - Actualizar pedido
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: pedidoBodySchema,
@@ -114,6 +120,7 @@ export default async function pedidosRoutes(fastify) {
 
   // DELETE /:id - Soft delete (estado cancelado)
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const { data: estadoCancelado } = await fastify.supabase
@@ -127,6 +134,7 @@ export default async function pedidosRoutes(fastify) {
 
   // POST /:id/detalle - Agregar línea
   fastify.post('/:id/detalle', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: detalleBodySchema,
@@ -152,6 +160,7 @@ export default async function pedidosRoutes(fastify) {
 
   // PUT /detalle/:id - Actualizar línea
   fastify.put('/detalle/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: detalleBodySchema,
@@ -165,6 +174,7 @@ export default async function pedidosRoutes(fastify) {
 
   // DELETE /detalle/:id - Eliminar línea
   fastify.delete('/detalle/:id', {
+    preHandler: mutate,
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const { error } = await fastify.supabase

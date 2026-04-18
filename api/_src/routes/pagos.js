@@ -15,6 +15,7 @@ const pagoBodySchema = {
 
 export default async function pagosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const mutate = fastify.requireRole(['admin', 'gestor']);
 
   // GET /pedido/:pedido_id - Obtener pagos de un pedido
   fastify.get('/pedido/:pedido_id', {
@@ -67,6 +68,7 @@ export default async function pagosRoutes(fastify) {
 
   // POST / - Registrar pago
   fastify.post('/', {
+    preHandler: mutate,
     schema: {
       body: {
         ...pagoBodySchema,
@@ -93,7 +95,8 @@ export default async function pagosRoutes(fastify) {
       .single();
 
     if (pagoError) {
-      return reply.code(500).send({ error: 'Error al registrar pago', details: pagoError.message });
+      req.log.error({ err: pagoError }, 'pagos insert failed');
+      return reply.code(500).send({ error: 'Error al registrar pago' });
     }
 
     // Recalcular saldo del pedido
@@ -116,6 +119,7 @@ export default async function pagosRoutes(fastify) {
 
   // PUT /:id - Actualizar pago
   fastify.put('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: pagoBodySchema,
@@ -167,6 +171,7 @@ export default async function pagosRoutes(fastify) {
 
   // DELETE /:id - Eliminar pago
   fastify.delete('/:id', {
+    preHandler: mutate,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },
