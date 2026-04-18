@@ -4,7 +4,8 @@ import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, 
 import { toast, openOv, closeOv, badge } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
-import { parseGoogleMapsUrl, parseAddress, zonaFromCP } from '../zonas.js';
+import { parseAddress, zonaFromCP } from '../zonas.js';
+import { resolveLocation } from '../geocoding.js';
 
 let cliMode = 'ex';
 let selectedModeloPrecio = 0;
@@ -337,27 +338,30 @@ export async function submitPedido(e) {
         throw new Error('Zona no determinable');
       }
 
-      // Coordenadas: preferir URL de Google Maps si se proporciona
-      let lat = null, lng = null;
-      if (url) {
-        const parsed = parseGoogleMapsUrl(url);
-        if (!parsed) {
-          alert('La URL de Google Maps no es válida o no contiene coordenadas (@lat,lng). Déjala vacía o copia el link completo desde Google Maps.');
-          throw new Error('URL de Google Maps inválida');
-        }
-        lat = parsed.lat; lng = parsed.lng;
-      } else {
-        // Sin URL: geocodificar la dirección como fallback
-        btn.innerHTML = '<span class="sp"></span> Geocodificando…';
-        try { const g = await geocodeAddress(dir); if (g) { lat = g.lat; lng = g.lng; } } catch (_) {}
+      // Coordenadas: usar pipeline unificado (URL larga/corta o texto)
+      btn.innerHTML = '<span class="sp"></span> Geocodificando…';
+      const loc = await resolveLocation({ url: url || null, address: dir });
+      if (loc?.error === 'low_zoom_search') {
+        alert(`La URL es de una búsqueda con zoom muy alejado (${loc.zoom || '?'}×), por lo que las coordenadas son del centro del mapa.\n\nAbre el pin del lugar (URL con "/maps/place/...") o acerca el mapa a zoom ≥ 17.`);
+        throw new Error('URL imprecisa');
       }
+      if (loc?.error === 'short_url_unresolved') {
+        alert('No se pudo resolver el enlace corto. Intenta con la URL larga de Google Maps.');
+        throw new Error('URL corta no resoluble');
+      }
+      const lat = loc?.lat ?? null;
+      const lng = loc?.lng ?? null;
 
       const row = await api.clientes.create({
         nombre, numero, direccion: dir, metodo_pago: pago, num_pedido: null,
         lat, lng, municipio,
-        google_maps_url: url || null,
+        google_maps_url: loc?.googleMapsUrl || url || null,
         codigo_postal: cp,
         zona,
+        geocode_source: loc?.source || null,
+        geocode_confidence: loc?.confidence || null,
+        ubicacion_verificada: !!loc?.verified,
+        verified_at: loc?.verified ? new Date().toISOString() : null,
       });
       const nc = cFromDb(row);
       state.clientes.push(nc);
@@ -425,15 +429,6 @@ export async function submitPedido(e) {
   btn.innerHTML = 'Guardar'; btn.disabled = false;
 }
 
-async function geocodeAddress(address) {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`,
-    { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } }
-  );
-  const data = await res.json();
-  if (data && data.length) return { lat: +data[0].lat, lng: +data[0].lon, municipio: data[0].address?.city || 'Desconocido' };
-  return null;
-}
 
 export async function deletePedido(id) {
   if (!confirm('¿Cancelar este pedido? Quedará marcado como cancelado.')) return;

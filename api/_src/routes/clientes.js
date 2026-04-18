@@ -78,6 +78,12 @@ export default async function clientesRoutes(fastify) {
         google_maps_url: body.google_maps_url || null,
         codigo_postal:   body.codigo_postal   || null,
         zona:            body.zona            || null,
+        geocode_source:       body.geocode_source       || null,
+        geocode_confidence:   body.geocode_confidence   || null,
+        ubicacion_verificada: body.ubicacion_verificada === true,
+        verified_at:          body.verified_at          || null,
+        reverse_municipio:    body.reverse_municipio    || null,
+        reverse_cp:           body.reverse_cp           || null,
       };
       const { data, error } = await fastify.supabase
         .from('clientes').insert(clienteRow).select().single();
@@ -128,6 +134,12 @@ export default async function clientesRoutes(fastify) {
       codigo_postal:   body.codigo_postal   !== undefined ? body.codigo_postal   : undefined,
       zona:            body.zona            !== undefined ? body.zona            : undefined,
       activo:          body.activo          !== undefined ? body.activo          : undefined,
+      geocode_source:       body.geocode_source       !== undefined ? body.geocode_source       : undefined,
+      geocode_confidence:   body.geocode_confidence   !== undefined ? body.geocode_confidence   : undefined,
+      ubicacion_verificada: body.ubicacion_verificada !== undefined ? body.ubicacion_verificada : undefined,
+      verified_at:          body.verified_at          !== undefined ? body.verified_at          : undefined,
+      reverse_municipio:    body.reverse_municipio    !== undefined ? body.reverse_municipio    : undefined,
+      reverse_cp:           body.reverse_cp           !== undefined ? body.reverse_cp           : undefined,
     };
     // Remove undefined keys
     Object.keys(row).forEach(k => row[k] === undefined && delete row[k]);

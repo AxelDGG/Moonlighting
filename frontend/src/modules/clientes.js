@@ -6,24 +6,10 @@ import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { updateMapMarkers } from './mapa.js';
+import { resolveLocation } from '../geocoding.js';
 
 let _showInactive = false;
 let _allLoaded = false; // true cuando ya se cargaron inactivos
-
-async function geocode(address) {
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`, { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } });
-  const data = await res.json();
-  if (data && data.length) { const item = data[0]; return { lat: +item.lat, lng: +item.lon, municipio: normMuni(item.address) }; }
-  return null;
-}
-function normMuni(a) {
-  let raw = '';
-  for (const k of ['city', 'town', 'municipality', 'county', 'state_district']) if (a[k]) { raw = a[k]; break; }
-  if (!raw) return 'Desconocido';
-  raw = raw.replace(/^Municipio\s+(de\s+)?/i, '').trim();
-  const known = ['Monterrey', 'San Pedro Garza García', 'Guadalupe', 'San Nicolás de los Garza', 'Apodaca', 'General Escobedo', 'Santa Catarina', 'García'];
-  return known.find(k => k.toLowerCase() === raw.toLowerCase()) || known.find(k => raw.toLowerCase().includes(k.toLowerCase().split(' ')[0])) || raw;
-}
 
 export async function toggleShowInactive() {
   _showInactive = !_showInactive;
@@ -71,11 +57,30 @@ export async function submitCliente(e) {
   let lat = addressChanged ? null : state.clientes[ci].lat;
   let lng = addressChanged ? null : state.clientes[ci].lng;
   let municipio = addressChanged ? 'Desconocido' : (state.clientes[ci].municipio || 'Desconocido');
+  let codigoPostal = addressChanged ? null : (state.clientes[ci].codigoPostal || null);
+  let geocodeSource = addressChanged ? null : state.clientes[ci].geocodeSource;
+  let geocodeConfidence = addressChanged ? null : state.clientes[ci].geocodeConfidence;
+  let ubicacionVerificada = addressChanged ? false : state.clientes[ci].ubicacionVerificada;
   if (addressChanged) {
     btn.innerHTML = '<span class="sp"></span> Geocodificando…';
-    try { const g = await geocode(dir); if (g) { lat = g.lat; lng = g.lng; municipio = g.municipio; } } catch (_) {}
+    try {
+      const r = await resolveLocation({ address: dir });
+      if (r && !r.error && r.lat != null) {
+        lat = r.lat; lng = r.lng;
+        municipio = r.municipio || 'Desconocido';
+        codigoPostal = r.codigoPostal || null;
+        geocodeSource = r.source;
+        geocodeConfidence = r.confidence;
+        ubicacionVerificada = !!r.verified;
+      }
+    } catch (_) {}
   }
-  const updated = { ...state.clientes[ci], nombre, numero, direccion: dir, metodoPago: pago, numPedido: np, lat, lng, municipio };
+  const updated = {
+    ...state.clientes[ci], nombre, numero, direccion: dir, metodoPago: pago, numPedido: np,
+    lat, lng, municipio, codigoPostal,
+    geocodeSource, geocodeConfidence, ubicacionVerificada,
+    verifiedAt: ubicacionVerificada ? new Date().toISOString() : state.clientes[ci].verifiedAt,
+  };
   try {
     await api.clientes.update(id, cToDb(updated));
     state.clientes[ci] = updated;

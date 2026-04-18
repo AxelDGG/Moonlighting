@@ -155,4 +155,11 @@ export const api = {
     create:  (data)   => post('/vehiculos', data),
     delete:  (id)     => del(`/vehiculos/${id}`),
   },
+
+  // ========== GEOCODE ==========
+  geocode: {
+    search:       (body)   => post('/geocode/search', body),
+    reverse:      (lat, lng) => post('/geocode/reverse', { lat, lng }),
+    resolveShort: (url)    => post('/geocode/resolve-short', { url }),
+  },
 };

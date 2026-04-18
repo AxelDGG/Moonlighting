@@ -5,6 +5,7 @@ import { toast } from '../ui.js';
 import { MUNIS, TIPO_IC, TIPO_BG, TIPO_CO } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { MUNICIPIOS_LIST, ZONAS_POR_MUNICIPIO, zonaFromCP, zonasDeMunicipio } from '../zonas.js';
+import { resolveLocation, toClientePayload } from '../geocoding.js';
 
 let map = null;
 let mapMarkers = [];
@@ -71,48 +72,45 @@ async function _loadRouteConfigs() {
   } catch (_) {}
 }
 
+// Wrapper delgado sobre resolveLocation() para compatibilidad con llamadas
+// internas que solo pasan texto (p. ej. route planner).
 async function geocode(address) {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}&limit=1`,
-    { headers: { 'Accept-Language': 'es', 'User-Agent': 'Moonlighting/4.0' } }
-  );
-  const data = await res.json();
-  if (data && data.length) {
-    const item = data[0];
-    return { lat: +item.lat, lng: +item.lon, municipio: item.address ? normMuni(item.address) : 'Desconocido' };
-  }
-  return null;
+  const r = await resolveLocation({ address });
+  if (!r || r.error || r.lat == null) return null;
+  return { lat: r.lat, lng: r.lng, municipio: r.municipio || 'Desconocido', confidence: r.confidence };
 }
 
-function normMuni(a) {
-  let raw = '';
-  for (const k of ['city', 'town', 'municipality', 'county', 'state_district']) {
-    if (a[k]) { raw = a[k]; break; }
-  }
-  if (!raw) return 'Desconocido';
-  raw = raw.replace(/^Municipio\s+(de\s+)?/i, '').trim();
-  const known = Object.keys(MUNIS);
-  return known.find(k => k.toLowerCase() === raw.toLowerCase())
-    || known.find(k => raw.toLowerCase().includes(k.toLowerCase().split(' ')[0]))
-    || raw;
+// Una ubicación se considera "precisa" si el backend la marcó verificada
+// (drag manual o URL de Google Maps) o si su confidence es 'high'.
+function isPreciseClient(c) {
+  if (!c) return false;
+  if (c.ubicacionVerificada) return true;
+  if (c.geocodeConfidence === 'high') return true;
+  // Legacy: si existe googleMapsUrl sin metadata, asumir precisa
+  return !!c.googleMapsUrl && !c.geocodeSource;
 }
 
-function markerIcon(color, size = 17) {
+function markerIcon(color, size = 17, precise = true) {
+  // Aproximada: opacidad reducida + borde punteado. Precisa: borde sólido, full opacity.
+  const opacity = precise ? 1 : 0.62;
+  const borderStyle = precise ? 'solid' : 'dashed';
   return L.divIcon({
     className: '',
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);transition:all .2s"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px ${borderStyle} #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);opacity:${opacity};transition:all .2s"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2 - 3]
   });
 }
 
-function markerIconStatus(color, pulse = false, size = 20) {
+function markerIconStatus(color, pulse = false, size = 20, precise = true) {
   const pulseStyle = pulse ? 'animation:pulse-marker 1.5s infinite;' : '';
+  const opacity = precise ? 1 : 0.7;
+  const borderStyle = precise ? 'solid' : 'dashed';
   return L.divIcon({
     className: '',
-    html: `<div style="position:relative;width:${size}px;height:${size}px">
-      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.4);${pulseStyle}"></div>
+    html: `<div style="position:relative;width:${size}px;height:${size}px;opacity:${opacity}">
+      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:3px ${borderStyle} #fff;box-shadow:0 2px 10px rgba(0,0,0,.4);${pulseStyle}"></div>
       ${pulse ? `<div style="position:absolute;inset:-4px;border-radius:50%;border:2px solid ${color};opacity:.4;animation:pulse-ring 1.5s infinite"></div>` : ''}
     </div>`,
     iconSize: [size, size],
@@ -147,7 +145,7 @@ function isCancelled(p) {
   return (p.estado || '').toLowerCase() === 'cancelado';
 }
 
-export async function updateMapMarkers() {
+export function updateMapMarkers() {
   if (!map) return;
   mapMarkers.forEach(m => map.removeLayer(m));
   muniZones.forEach(z => map.removeLayer(z));
@@ -156,77 +154,22 @@ export async function updateMapMarkers() {
 
   const activeMunis = new Set();
   const bounds = [];
-  const toSave = [];
+  const missing = [];
 
   // Solo mostrar clientes activos
   const activeClientes = state.clientes.filter(c => c.activo !== false);
 
-  for (let i = 0; i < activeClientes.length; i++) {
-    const c = activeClientes[i];
-    // Hallar índice real en state.clientes
-    const si = state.clientes.findIndex(x => x.id === c.id);
-
+  for (const c of activeClientes) {
     if (!c.lat || !c.lng) {
-      if (i > 0) await new Promise(r => setTimeout(r, 1100));
-      try {
-        const g = await geocode(c.direccion);
-        if (g) {
-          state.clientes[si] = { ...c, lat: g.lat, lng: g.lng, municipio: g.municipio };
-          toSave.push(state.clientes[si]);
-        }
-      } catch (_) {}
+      if (c.direccion) missing.push(c.id);
+      continue;
     }
-    const client = state.clientes[si];
-    if (!client.lat || !client.lng) continue;
-    const muni = client.municipio || 'Desconocido';
+    const muni = c.municipio || 'Desconocido';
     if (activeLayers[muni] === false) continue;
-    if (!clientPassFilter(client)) continue;
+    if (!clientPassFilter(c)) continue;
     activeMunis.add(muni);
-
-    const serviceStatus = getClientServiceStatus(client.id);
-    let markerColor, isPulse = false, markerSize = 17;
-    if (serviceStatus === 'completado') { markerColor = '#22c55e'; markerSize = 18; }
-    else if (serviceStatus === 'en_curso') { markerColor = '#3b82f6'; isPulse = true; markerSize = 20; }
-    else if (serviceStatus === 'atrasado') { markerColor = '#ef4444'; isPulse = true; markerSize = 20; }
-    else if (serviceStatus === 'programado') { markerColor = '#f59e0b'; markerSize = 17; }
-    else { markerColor = muniColor(muni); markerSize = 17; }
-
-    const icon = (serviceStatus !== 'none')
-      ? markerIconStatus(markerColor, isPulse, markerSize)
-      : markerIcon(markerColor);
-
-    const marker = L.marker([client.lat, client.lng], { icon }).addTo(map);
-    const pedCli = state.pedidos.filter(p => p.clienteId === client.id && !isCancelled(p));
-    const pedHtml = pedCli.length
-      ? pedCli.map(p => {
-          const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-          const iconName = TIPO_IC[p.tipoServicio] || 'package';
-          return `<div style="margin-top:3px;font-size:11px;color:#475569;display:flex;align-items:center;gap:4px"><i data-lucide="${iconName}" style="width:11px;height:11px;flex-shrink:0"></i> ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
-        }).join('')
-      : '<div style="font-size:11px;color:#94a3b8;margin-top:3px">Sin pedidos</div>';
-
-    const statusLabel = serviceStatus !== 'none' ? `<div style="margin:4px 0">${statusPill(serviceStatus)}</div>` : '';
-    marker.bindPopup(
-      `<div style="min-width:195px;font-size:12.5px;line-height:1.6">
-        <div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(client.nombre)}</div>
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-          <span style="width:8px;height:8px;border-radius:50%;background:${muniColor(muni)};display:inline-block"></span>
-          <span style="font-size:11px;color:#64748b">${esc(muni)}</span>
-        </div>
-        ${statusLabel}
-        <span style="display:flex;align-items:center;gap:4px"><i data-lucide="phone" style="width:11px;height:11px"></i> ${esc(client.numero)}</span>
-        <span style="display:flex;align-items:center;gap:4px"><i data-lucide="map-pin" style="width:11px;height:11px"></i> <span style="font-size:11.5px">${esc(client.direccion)}</span></span>
-        ${pillPago(client.metodoPago)}<br/>
-        ${pedHtml}
-      </div>`,
-      { maxWidth: 285 }
-    );
-    mapMarkers.push(marker);
-    bounds.push([client.lat, client.lng]);
-  }
-
-  for (const c of toSave) {
-    try { await api.clientes.update(c.id, { lat: c.lat, lng: c.lng, municipio: c.municipio }); } catch (_) {}
+    _addClientMarker(c);
+    bounds.push([c.lat, c.lng]);
   }
 
   _drawZonePolygons(activeClientes, activeMunis);
@@ -235,7 +178,174 @@ export async function updateMapMarkers() {
   else if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50] });
 
   renderMapLegend();
-  updateMapCount();
+  updateMapCount(missing.length);
+
+  // Geocodificar en background lo que falta, sin bloquear el render.
+  if (missing.length) _enqueueGeocode(missing);
+}
+
+function _addClientMarker(client) {
+  const muni = client.municipio || 'Desconocido';
+  const serviceStatus = getClientServiceStatus(client.id);
+  const precise = isPreciseClient(client);
+
+  let markerColor, isPulse = false, markerSize = 17;
+  if (serviceStatus === 'completado') { markerColor = '#22c55e'; markerSize = 18; }
+  else if (serviceStatus === 'en_curso') { markerColor = '#3b82f6'; isPulse = true; markerSize = 20; }
+  else if (serviceStatus === 'atrasado') { markerColor = '#ef4444'; isPulse = true; markerSize = 20; }
+  else if (serviceStatus === 'programado') { markerColor = '#f59e0b'; markerSize = 17; }
+  else { markerColor = muniColor(muni); markerSize = 17; }
+
+  const icon = (serviceStatus !== 'none')
+    ? markerIconStatus(markerColor, isPulse, markerSize, precise)
+    : markerIcon(markerColor, 17, precise);
+
+  const marker = L.marker([client.lat, client.lng], { icon, draggable: true, autoPan: true }).addTo(map);
+  marker.on('dragend', e => _onMarkerDragEnd(client.id, e.target));
+  marker.on('dragstart', () => marker.closePopup());
+
+  const pedCli = state.pedidos.filter(p => p.clienteId === client.id && !isCancelled(p));
+  const pedHtml = pedCli.length
+    ? pedCli.map(p => {
+        const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
+        const iconName = TIPO_IC[p.tipoServicio] || 'package';
+        return `<div style="margin-top:3px;font-size:11px;color:#475569;display:flex;align-items:center;gap:4px"><i data-lucide="${iconName}" style="width:11px;height:11px;flex-shrink:0"></i> ${pedidoDetalle(p)} — <b>${money(p.total)}</b>${sm ? ` ${statusPill(sm.estado)}` : ''}</div>`;
+      }).join('')
+    : '<div style="font-size:11px;color:#94a3b8;margin-top:3px">Sin pedidos</div>';
+
+  const statusLabel = serviceStatus !== 'none' ? `<div style="margin:4px 0">${statusPill(serviceStatus)}</div>` : '';
+  const conf = client.geocodeConfidence;
+  let pillLabel, pillBg, pillFg, pillIcon;
+  if (client.ubicacionVerificada) {
+    pillLabel = 'Verificada'; pillBg = '#dcfce7'; pillFg = '#166534'; pillIcon = 'check-circle-2';
+  } else if (conf === 'high') {
+    pillLabel = 'Precisión alta'; pillBg = '#dbeafe'; pillFg = '#1e40af'; pillIcon = 'check-circle-2';
+  } else if (conf === 'low') {
+    pillLabel = 'Baja confianza · arrastra para corregir'; pillBg = '#fee2e2'; pillFg = '#991b1b'; pillIcon = 'alert-triangle';
+  } else {
+    pillLabel = 'Aproximada · arrastra para corregir'; pillBg = '#fef3c7'; pillFg = '#92400e'; pillIcon = 'help-circle';
+  }
+  const precisionPill = `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:10px;background:${pillBg};color:${pillFg};font-weight:600"><i data-lucide="${pillIcon}" style="width:10px;height:10px"></i> ${pillLabel}</span>`;
+
+  const gmapsHref = `https://www.google.com/maps/dir/?api=1&destination=${client.lat},${client.lng}`;
+  const wazeHref  = `https://waze.com/ul?ll=${client.lat},${client.lng}&navigate=yes`;
+  const navBtnStyle = 'flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:600;padding:5px 8px;border-radius:6px;text-decoration:none;border:1px solid #e2e8f0';
+
+  marker.bindPopup(
+    `<div style="min-width:210px;font-size:12.5px;line-height:1.6">
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(client.nombre)}</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${muniColor(muni)};display:inline-block"></span>
+        <span style="font-size:11px;color:#64748b">${esc(muni)}</span>
+      </div>
+      <div style="margin-bottom:5px">${precisionPill}</div>
+      ${statusLabel}
+      <span style="display:flex;align-items:center;gap:4px"><i data-lucide="phone" style="width:11px;height:11px"></i> ${esc(client.numero)}</span>
+      <span style="display:flex;align-items:center;gap:4px"><i data-lucide="map-pin" style="width:11px;height:11px"></i> <span style="font-size:11.5px">${esc(client.direccion)}</span></span>
+      ${pillPago(client.metodoPago)}
+      <div style="display:flex;gap:5px;margin-top:7px">
+        <a href="${gmapsHref}" target="_blank" rel="noopener" style="${navBtnStyle};background:#4285f4;color:#fff;border-color:#4285f4"><i data-lucide="navigation" style="width:11px;height:11px"></i> Google Maps</a>
+        <a href="${wazeHref}" target="_blank" rel="noopener" style="${navBtnStyle};background:#33ccff;color:#fff;border-color:#33ccff"><i data-lucide="car" style="width:11px;height:11px"></i> Waze</a>
+      </div>
+      ${pedHtml}
+    </div>`,
+    { maxWidth: 300 }
+  );
+  mapMarkers.push(marker);
+}
+
+async function _onMarkerDragEnd(clienteId, markerObj) {
+  const pos = markerObj.getLatLng();
+  const si = state.clientes.findIndex(x => x.id === clienteId);
+  if (si === -1) return;
+  const prev = state.clientes[si];
+  const lat = +pos.lat.toFixed(6), lng = +pos.lng.toFixed(6);
+  const gmapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const nowIso = new Date().toISOString();
+  state.clientes[si] = {
+    ...prev, lat, lng,
+    googleMapsUrl: gmapsUrl,
+    geocodeSource: 'manual_drag',
+    geocodeConfidence: 'high',
+    ubicacionVerificada: true,
+    verifiedAt: nowIso,
+  };
+  try {
+    await api.clientes.update(clienteId, {
+      lat, lng,
+      google_maps_url: gmapsUrl,
+      geocode_source: 'manual_drag',
+      geocode_confidence: 'high',
+      ubicacion_verificada: true,
+      verified_at: nowIso,
+    });
+    // Reverse-geocode para guardar el muni/CP observado (no bloqueante)
+    api.geocode.reverse(lat, lng).then(rev => {
+      if (!rev) return;
+      const patch = { reverse_municipio: rev.municipio || null, reverse_cp: rev.codigoPostal || null };
+      api.clientes.update(clienteId, patch).catch(() => {});
+      state.clientes[si] = { ...state.clientes[si], reverseMunicipio: rev.municipio || null, reverseCp: rev.codigoPostal || null };
+    }).catch(() => {});
+    toast('Ubicación verificada ✓');
+    updateMapMarkers();
+  } catch (err) {
+    state.clientes[si] = prev;
+    markerObj.setLatLng([prev.lat, prev.lng]);
+    toast('Error al guardar ubicación: ' + (err.message || ''), 'er');
+  }
+}
+
+// ── Background geocoding ──────────────────────────────────────────────────────
+// Evita bloquear el render: los clientes sin coords se procesan uno a uno
+// respetando el rate-limit de Nominatim (~1 req/s) y el mapa se refresca cuando
+// termina la cola.
+const _geocodePending = new Set();
+let _geocodeRunning = false;
+
+function _enqueueGeocode(ids) {
+  for (const id of ids) _geocodePending.add(id);
+  if (!_geocodeRunning) _runGeocodeQueue();
+}
+
+async function _runGeocodeQueue() {
+  if (_geocodeRunning) return;
+  _geocodeRunning = true;
+  let anyUpdated = false;
+  try {
+    while (_geocodePending.size) {
+      const id = _geocodePending.values().next().value;
+      _geocodePending.delete(id);
+      const si = state.clientes.findIndex(x => x.id === id);
+      if (si === -1) continue;
+      const c = state.clientes[si];
+      if (!c || c.lat && c.lng) continue;
+      if (!c.direccion) continue;
+      try {
+        const r = await resolveLocation({ address: c.direccion });
+        if (r && !r.error && r.lat != null) {
+          const payload = toClientePayload(r, { municipio: c.municipio || r.municipio });
+          state.clientes[si] = {
+            ...c,
+            lat: r.lat, lng: r.lng,
+            municipio: c.municipio || r.municipio || 'Desconocido',
+            codigoPostal: c.codigoPostal || r.codigoPostal || null,
+            geocodeSource: r.source,
+            geocodeConfidence: r.confidence,
+            ubicacionVerificada: !!r.verified,
+            verifiedAt: r.verified ? new Date().toISOString() : null,
+          };
+          try { await api.clientes.update(id, payload); } catch (_) {}
+          anyUpdated = true;
+        }
+      } catch (_) {}
+      // Actualiza contador de pendientes sin redibujar todo el mapa
+      updateMapCount(_geocodePending.size);
+      if (_geocodePending.size) await new Promise(r => setTimeout(r, 1100));
+    }
+  } finally {
+    _geocodeRunning = false;
+    if (anyUpdated) updateMapMarkers();
+  }
 }
 
 function renderMapLegend() {
@@ -512,12 +622,16 @@ function updateMapFilterUI() {
   document.getElementById('mf-reset')?.classList.toggle('show', active);
 }
 
-function updateMapCount() {
+function updateMapCount(pendingGeocode = null) {
   const el = document.getElementById('mf-count');
   if (!el) return;
   const total = state.clientes.filter(c => c.activo !== false && c.lat && c.lng).length;
   const shown = mapMarkers.length;
   const isFiltered = mapFilter.nombre || mapFilter.tel || mapFilter.dir || mapFilter.tipos.size > 0 || mapFilter.estado || mapFilter.zona || mapFilter.subzona || mapFilter.tecnico;
+  const pending = pendingGeocode ?? _geocodePending.size;
+  const pendingHtml = pending > 0
+    ? ` · <span style="color:var(--wa);display:inline-flex;align-items:center;gap:3px"><i data-lucide="loader-2" style="width:11px;height:11px;animation:spn 1s linear infinite"></i> geocodificando ${pending}</span>`
+    : '';
 
   // Si hay municipio seleccionado (pero aún no zona), mostrar desglose por zona
   if (mapFilter.zona && !mapFilter.subzona) {
@@ -529,14 +643,16 @@ function updateMapCount() {
       });
     const parts = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
       .map(([z, n]) => `<span style="color:${ZONA_COLORS[z] || '#64748b'}">${esc(z)} <b>${n}</b></span>`);
-    el.innerHTML = parts.length
+    el.innerHTML = (parts.length
       ? `<b>${shown}</b> de ${total} · ${parts.join(' · ')}`
-      : `<b>${shown}</b> de ${total} clientes`;
+      : `<b>${shown}</b> de ${total} clientes`) + pendingHtml;
+    refreshIcons(el);
     return;
   }
-  el.innerHTML = isFiltered
+  el.innerHTML = (isFiltered
     ? `<b>${shown}</b> de ${total} clientes`
-    : `<b>${total}</b> cliente${total !== 1 ? 's' : ''}`;
+    : `<b>${total}</b> cliente${total !== 1 ? 's' : ''}`) + pendingHtml;
+  refreshIcons(el);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

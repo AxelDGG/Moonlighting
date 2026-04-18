@@ -60,6 +60,13 @@ export function cFromDb(r) {
     googleMapsUrl: r.google_maps_url || null,
     codigoPostal:  r.codigo_postal   || null,
     zona:          r.zona            || null,
+    geocodeSource:       r.geocode_source       || null,
+    geocodeConfidence:   r.geocode_confidence   || null,
+    ubicacionVerificada: r.ubicacion_verificada === true,
+    verifiedAt:          r.verified_at          || null,
+    reverseMunicipio:    r.reverse_municipio    || null,
+    reverseCp:           r.reverse_cp           || null,
+    zonaGeo:             r.zona_nombre          || null, // de v_clientes_zona
     // campos nuevos
     telefono:    r.telefono     || r.numero   || '',
     telefonoAlt: r.telefono_alt || null,
@@ -85,6 +92,12 @@ export function cToDb(c) {
     google_maps_url: c.googleMapsUrl || null,
     codigo_postal:   c.codigoPostal  || null,
     zona:            c.zona           || null,
+    geocode_source:       c.geocodeSource       || null,
+    geocode_confidence:   c.geocodeConfidence   || null,
+    ubicacion_verificada: c.ubicacionVerificada === true,
+    verified_at:          c.verifiedAt          || null,
+    reverse_municipio:    c.reverseMunicipio    || null,
+    reverse_cp:           c.reverseCp           || null,
     // nuevo
     telefono:     c.telefono     || c.numero    || null,
     telefono_alt: c.telefonoAlt  || null,
