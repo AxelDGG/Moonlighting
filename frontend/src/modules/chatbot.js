@@ -54,7 +54,7 @@ function renderMessages() {
 }
 
 export function renderChatbot() {
-  const tab = document.getElementById('tab-chatbot');
+  const tab = document.getElementById('tab-asistente');
   if (!tab || tab.querySelector('#chat-msgs')) return;
 
   tab.innerHTML = `
