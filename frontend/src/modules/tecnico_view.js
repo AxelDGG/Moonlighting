@@ -101,13 +101,12 @@ export function renderTecnicoView() {
       </div></div>
     </div>`;
 
-  const diasHtml = dias.map(dia => {
+  function renderDiaBlock(dia, isPast) {
     const lista = porDia.get(dia).sort((a, b) => {
       const ha = a.sm?.hora_programada || '99:99';
       const hb = b.sm?.hora_programada || '99:99';
       return ha.localeCompare(hb);
     });
-    const isPast = dia !== 'sin-fecha' && dia < hoy;
     const isToday = dia === hoy;
     const label = dia === 'sin-fecha' ? 'Sin fecha asignada' : diaBonito(dia);
     const fullDate = dia === 'sin-fecha' ? '' : fdate(dia);
@@ -182,7 +181,28 @@ export function renderTecnicoView() {
         </div>
         ${cards}
       </div>`;
-  }).join('');
+  }
+
+  const pastDias  = dias.filter(d => d !== 'sin-fecha' && d < hoy);
+  const activeDias = dias.filter(d => d === 'sin-fecha' || d >= hoy);
+
+  const activeHtml = activeDias.map(d => renderDiaBlock(d, false)).join('');
+
+  const totalPasados = pastDias.reduce((n, d) => n + porDia.get(d).length, 0);
+  const pastHtml = pastDias.length ? `
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bo);border-radius:8px;user-select:none;color:var(--mu)">
+        <i data-lucide="history" style="width:14px;height:14px;flex-shrink:0"></i>
+        <span style="font-weight:600;font-size:13px">Días anteriores</span>
+        <span style="background:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${pastDias.length} día${pastDias.length === 1 ? '' : 's'} · ${totalPasados} servicio${totalPasados === 1 ? '' : 's'}</span>
+        <i data-lucide="chevron-down" style="width:14px;height:14px;flex-shrink:0;margin-left:auto" class="details-chevron"></i>
+      </summary>
+      <div style="margin-top:12px">
+        ${[...pastDias].reverse().map(d => renderDiaBlock(d, true)).join('')}
+      </div>
+    </details>` : '';
+
+  const diasHtml = activeHtml + pastHtml;
 
   tab.innerHTML = `
     <div style="max-width:780px;margin:0 auto;padding:0 4px">
