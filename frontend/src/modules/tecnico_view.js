@@ -25,7 +25,7 @@ function diaBonito(fechaStr) {
   if (!fechaStr) return '—';
   const d = new Date(fechaStr + 'T12:00:00');
   const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  hoy.setHours(12, 0, 0, 0);
   const diff = Math.round((d - hoy) / 86400000);
   if (diff === 0) return 'Hoy';
   if (diff === 1) return 'Mañana';
