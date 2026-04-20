@@ -1,0 +1,38 @@
+{
+  "name": "Moonlighting — Abanicos & Persianas",
+  "short_name": "Moonlighting",
+  "description": "Gestión de clientes, pedidos e instalaciones de abanicos y persianas.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "lang": "es-MX",
+  "dir": "ltr",
+  "scope": "/",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mi agenda",
+      "short_name": "Agenda",
+      "description": "Vista del técnico: servicios asignados hoy.",
+      "url": "/?tab=tecnico",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Nuevo pedido",
+      "short_name": "Pedido",
+      "description": "Registrar un nuevo pedido.",
+      "url": "/?tab=pedidos",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

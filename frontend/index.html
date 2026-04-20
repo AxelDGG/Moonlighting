@@ -2,10 +2,29 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="description" content="Sistema de gestión de Moonlighting — instalación de abanicos de techo y persianas en Monterrey, NL."/>
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Moonlighting"/>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/favicon.svg"/>
+  <link rel="manifest" href="/manifest.json"/>
   <title>Moonlighting — Abanicos &amp; Persianas</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="/src/styles/app.css"/>
+  <script>
+    // Apply saved theme ASAP to avoid FOUC
+    (function() {
+      try {
+        var saved = localStorage.getItem('theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (_) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -35,7 +54,7 @@
   </div>
 </div>
 
-<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<div id="sidebar-overlay" onclick="toggleSidebar()" aria-hidden="true"></div>
 <div id="app-shell" style="display:none">
   <aside class="sidebar">
     <div class="logo">
@@ -86,12 +105,20 @@
   <main class="main">
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:12px">
-        <button id="menu-toggle" class="btn bg bsm" style="display:none;padding:5px 8px" onclick="toggleSidebar()">
-          <i data-lucide="menu" style="width:18px;height:18px"></i>
+        <button id="menu-toggle" class="btn bg bsm" style="display:none;padding:5px 8px" onclick="toggleSidebar()" aria-label="Abrir menú de navegación">
+          <i data-lucide="menu" style="width:18px;height:18px" aria-hidden="true"></i>
         </button>
         <h1 id="ptitle">Dashboard</h1>
+        <span id="offline-indicator" class="offline-pill" style="display:none" role="status" aria-live="polite">
+          <i data-lucide="wifi-off" aria-hidden="true"></i> Sin conexión
+        </span>
       </div>
-      <span class="tb" id="pbadge">…</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" aria-label="Cambiar tema claro/oscuro" title="Cambiar tema">
+          <i data-lucide="moon" aria-hidden="true"></i>
+        </button>
+        <span class="tb" id="pbadge" aria-label="Pedidos activos">…</span>
+      </div>
     </div>
     <div class="content">
 
@@ -135,14 +162,21 @@
             </div>
             <div class="tw">
               <table>
-                <thead><tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Municipio</th><th>Método Pago</th><th>Pedido</th><th class="tr">Acciones</th></tr></thead>
+                <thead><tr>
+                  <th class="sortable" data-sort="id" onclick="sortClientes('id')">ID</th>
+                  <th class="sortable" data-sort="nombre" onclick="sortClientes('nombre')">Nombre</th>
+                  <th class="sortable" data-sort="numero" onclick="sortClientes('numero')">Teléfono</th>
+                  <th>Dirección</th>
+                  <th class="sortable" data-sort="municipio" onclick="sortClientes('municipio')">Municipio</th>
+                  <th class="sortable" data-sort="metodoPago" onclick="sortClientes('metodoPago')">Método Pago</th>
+                  <th class="sortable" data-sort="numPedido" onclick="sortClientes('numPedido')">Pedido</th>
+                  <th class="tr">Acciones</th>
+                </tr></thead>
                 <tbody id="tbc"></tbody>
               </table>
-              <div id="ec" class="empty" style="display:none">
-                <div class="ei"><i data-lucide="users" style="width:40px;height:40px;opacity:.3"></i></div>
-                <p>Sin clientes</p>
-              </div>
+              <div id="ec" class="empty" style="display:none"></div>
             </div>
+            <div id="cli-pag" class="pg-bar" style="display:none"></div>
           </div>
         </div>
       </section>
@@ -173,11 +207,9 @@
                 <thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Detalle</th><th class="tr">Cant.</th><th>Total</th><th>Estado</th><th class="tr">Acciones</th></tr></thead>
                 <tbody id="tbp"></tbody>
               </table>
-              <div id="ep" class="empty" style="display:none">
-                <div class="ei"><i data-lucide="package" style="width:40px;height:40px;opacity:.3"></i></div>
-                <p>Sin pedidos</p>
-              </div>
+              <div id="ep" class="empty" style="display:none"></div>
             </div>
+            <div id="ped-pag" class="pg-bar" style="display:none"></div>
           </div>
         </div>
       </section>
@@ -426,7 +458,7 @@
 <!-- Cliente -->
 <div class="ov" id="ov-cli">
   <div class="modal">
-    <div class="mh"><h3>Editar Cliente</h3><button class="mc" onclick="closeOv('ov-cli')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3>Editar Cliente</h3><button class="mc" onclick="closeOv('ov-cli')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb">
       <form id="fc" onsubmit="submitCliente(event)">
         <input type="hidden" id="c-eid"/>
@@ -453,7 +485,7 @@
 <!-- Pedido -->
 <div class="ov" id="ov-ped">
   <div class="modal">
-    <div class="mh"><h3 id="mp-t">Nuevo Pedido</h3><button class="mc" onclick="closeOv('ov-ped')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3 id="mp-t">Nuevo Pedido</h3><button class="mc" onclick="closeOv('ov-ped')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb">
       <form id="fp" onsubmit="submitPedido(event)">
         <input type="hidden" id="p-eid"/>
@@ -566,7 +598,7 @@
 <!-- Tracking -->
 <div class="ov" id="ov-track">
   <div class="modal" style="width:500px">
-    <div class="mh"><h3 id="track-title">Seguimiento</h3><button class="mc" onclick="closeOv('ov-track')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3 id="track-title">Seguimiento</h3><button class="mc" onclick="closeOv('ov-track')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb" id="track-body"></div>
   </div>
 </div>
@@ -574,7 +606,7 @@
 <!-- Almacén -->
 <div class="ov" id="ov-almacen">
   <div class="modal" style="width:520px">
-    <div class="mh"><h3 id="ma-t">Nueva Entrada</h3><button class="mc" onclick="closeOv('ov-almacen')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3 id="ma-t">Nueva Entrada</h3><button class="mc" onclick="closeOv('ov-almacen')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb">
       <form id="fa" onsubmit="submitAlmacen(event)">
         <input type="hidden" id="a-eid"/>
@@ -609,7 +641,7 @@
 <!-- Gestionar Vehículos/Zonas -->
 <div class="ov" id="ov-vehiculos">
   <div class="modal" style="width:420px">
-    <div class="mh"><h3><i data-lucide="truck" style="width:15px;height:15px;vertical-align:middle;margin-right:5px"></i>Vehículos / Zonas</h3><button class="mc" onclick="closeOv('ov-vehiculos')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3><i data-lucide="truck" style="width:15px;height:15px;vertical-align:middle;margin-right:5px"></i>Vehículos / Zonas</h3><button class="mc" onclick="closeOv('ov-vehiculos')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb">
       <div id="veh-list" style="margin-bottom:16px"></div>
       <form onsubmit="submitVehiculo(event)" style="display:flex;gap:8px">
@@ -627,7 +659,7 @@
       <h3>Técnicos</h3>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn bp bsm" onclick="openTecnicoModal()"><i data-lucide="plus" style="width:13px;height:13px"></i> Nuevo técnico</button>
-        <button class="mc" onclick="closeOv('ov-tecnicos')"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+        <button class="mc" onclick="closeOv('ov-tecnicos')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button>
       </div>
     </div>
     <div class="mb">
@@ -644,7 +676,7 @@
 <!-- Nuevo / Editar Técnico -->
 <div class="ov" id="ov-tecnico">
   <div class="modal" style="width:480px">
-    <div class="mh"><h3 id="mt-title">Nuevo Técnico</h3><button class="mc" onclick="closeOv('ov-tecnico')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+    <div class="mh"><h3 id="mt-title">Nuevo Técnico</h3><button class="mc" onclick="closeOv('ov-tecnico')" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button></div>
     <div class="mb">
       <form id="ft" onsubmit="submitTecnico(event)">
         <input type="hidden" id="t-eid"/>
@@ -686,7 +718,7 @@
   <div class="modal" style="width:480px">
     <div class="mh">
       <h3><i data-lucide="settings-2" style="width:15px;height:15px;vertical-align:middle;margin-right:5px"></i>Configurar ruta</h3>
-      <button class="mc" onclick="closeRouteConfig()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      <button class="mc" onclick="closeRouteConfig()" aria-label="Cerrar"><i data-lucide="x" style="width:16px;height:16px" aria-hidden="true"></i></button>
     </div>
     <div class="mb">
       <div class="fg">

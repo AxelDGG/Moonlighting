@@ -1,7 +1,7 @@
 import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb, pdFromDb, pdToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
-import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
+import { toast, openOv, closeOv, badge, initMobileRows, confirmDialog } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
 import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
@@ -9,6 +9,12 @@ import { resolveLocation } from '../geocoding.js';
 
 let cliMode = 'ex';
 let _showCancelled = false;
+let _pedPageLimit = 50;
+
+export function loadMorePedidos() {
+  _pedPageLimit += 50;
+  renderPedidos();
+}
 
 // Líneas del pedido en edición. Cada línea:
 //   { modelo, cantidad, precioUnit, nDesins, ancho, alto, instalacion, tipoTela, notas, acIdx, stock }
@@ -973,7 +979,11 @@ export async function submitPedido(e) {
 
 
 export async function deletePedido(id) {
-  if (!confirm('¿Cancelar este pedido? Quedará marcado como cancelado.')) return;
+  const ok = await confirmDialog(
+    'El pedido quedará marcado como cancelado. Puedes mostrarlo de nuevo con el filtro "Cancelados".',
+    { title: 'Cancelar pedido', confirmLabel: 'Cancelar pedido', cancelLabel: 'Volver', variant: 'warn' }
+  );
+  if (!ok) return;
   try {
     await api.pedidos.delete(id);
     // Marcar como cancelado en estado local (soft delete)
@@ -1011,10 +1021,29 @@ export function renderPedidos() {
       (p.fecha || '').includes(q);
   });
 
-  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  if (!list.length) {
+    tbody.innerHTML = '';
+    const hasFilter = q || _showCancelled || tecnicoFilter;
+    empty.innerHTML = hasFilter
+      ? `<div class="ei"><i data-lucide="search-x" style="width:40px;height:40px"></i></div>
+         <p>Ningún pedido coincide con tu búsqueda.</p>
+         <button class="btn bg empty-cta" onclick="document.getElementById('qp').value='';renderPedidos()"><i data-lucide="x" style="width:13px;height:13px"></i> Limpiar búsqueda</button>`
+      : `<div class="ei"><i data-lucide="package" style="width:40px;height:40px"></i></div>
+         <p>Aún no hay pedidos.</p>
+         <button class="btn bp empty-cta" onclick="openPedidoModal()"><i data-lucide="plus" style="width:13px;height:13px"></i> Nuevo pedido</button>`;
+    empty.style.display = 'block';
+    refreshIcons(empty);
+    _updatePedPagBar(0, 0);
+    return;
+  }
   empty.style.display = 'none';
 
-  tbody.innerHTML = list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(p => {
+  const sorted = list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  const total = sorted.length;
+  const shown = Math.min(_pedPageLimit, total);
+  const page = sorted.slice(0, shown);
+
+  tbody.innerHTML = page.map(p => {
     const c       = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
     const sm      = state.servicios_metricas.find(s => s.pedido_id === p.id);
     const cancelled = isCancelled(p);
@@ -1076,6 +1105,21 @@ export function renderPedidos() {
   badge(activeCount + ' pedidos');
   refreshIcons(tbody);
   initMobileRows(tbody);
+  _updatePedPagBar(shown, total);
+}
+
+function _updatePedPagBar(shown, total) {
+  const bar = document.getElementById('ped-pag');
+  if (!bar) return;
+  if (total <= 50) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <div class="pg-info">Mostrando <b>${shown}</b> de <b>${total}</b> pedidos</div>
+    ${shown < total
+      ? `<button class="pg-more" onclick="loadMorePedidos()"><i data-lucide="chevron-down" style="width:13px;height:13px" aria-hidden="true"></i> Cargar 50 más</button>`
+      : `<span class="pg-info">Todos mostrados</span>`
+    }`;
+  refreshIcons(bar);
 }
 
 export function togglePedidoExpand(id) {

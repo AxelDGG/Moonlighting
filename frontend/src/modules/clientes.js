@@ -1,7 +1,7 @@
 import { state, cFromDb, cToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, muniColor, pillPago, todayStr, downloadCSV } from '../utils.js';
-import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
+import { toast, openOv, closeOv, badge, initMobileRows, confirmDialog } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { PAGO_IC } from '../constants.js';
 import { refreshIcons } from '../icons.js';
@@ -11,6 +11,29 @@ import { resolveLocation } from '../geocoding.js';
 
 let _showInactive = false;
 let _allLoaded = false; // true cuando ya se cargaron inactivos
+let _sort = { col: 'id', dir: 'desc' };
+let _pageLimit = 50;
+
+const SORT_ACCESSORS = {
+  id: c => c.id,
+  nombre: c => (c.nombre || '').toLowerCase(),
+  numero: c => (c.numero || c.telefono || '').replace(/\D/g, ''),
+  municipio: c => (c.municipio || '').toLowerCase(),
+  metodoPago: c => (c.metodoPago || '').toLowerCase(),
+  numPedido: c => (c.numPedido || '').toLowerCase(),
+};
+
+export function sortClientes(col) {
+  if (_sort.col === col) _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
+  else { _sort = { col, dir: col === 'id' ? 'desc' : 'asc' }; }
+  _pageLimit = 50;
+  renderClientes();
+}
+
+export function loadMoreClientes() {
+  _pageLimit += 50;
+  renderClientes();
+}
 
 export async function toggleShowInactive() {
   _showInactive = !_showInactive;
@@ -121,7 +144,11 @@ export async function restoreCliente(id) {
 
 export async function deleteCliente(id) {
   const c = state.clientes.find(x => x.id === id);
-  if (!confirm(`¿Eliminar a ${c?.nombre || 'este cliente'}? Quedará inactivo y no aparecerá en la lista.`)) return;
+  const ok = await confirmDialog(
+    `¿Eliminar a ${c?.nombre || 'este cliente'}? Quedará inactivo y no aparecerá en la lista. Puedes restaurarlo después.`,
+    { title: 'Eliminar cliente', confirmLabel: 'Eliminar', variant: 'danger' }
+  );
+  if (!ok) return;
   try {
     await api.clientes.delete(id);
     // Marcar como inactivo en estado local (soft delete)
@@ -133,7 +160,7 @@ export async function deleteCliente(id) {
 }
 
 export function renderClientes() {
-  const q = (document.getElementById('qc')?.value || '').toLowerCase();
+  const q = (document.getElementById('qc')?.value || '').toLowerCase().trim();
   const tbody = document.getElementById('tbc'), empty = document.getElementById('ec');
 
   // Sincronizar botón de toggle
@@ -145,16 +172,53 @@ export function renderClientes() {
 
   let list = state.clientes.filter(c => {
     if (!_showInactive && c.activo === false) return false;
+    if (!q) return true;
     return c.nombre.toLowerCase().includes(q) || String(c.id).includes(q)
       || (c.numero || '').toLowerCase().includes(q)
       || (c.direccion || '').toLowerCase().includes(q)
       || (c.municipio || '').toLowerCase().includes(q);
   });
 
-  if (!list.length) { tbody.innerHTML = ''; empty.style.display = 'block'; refreshIcons(empty); return; }
+  // Sort
+  const accessor = SORT_ACCESSORS[_sort.col] || SORT_ACCESSORS.id;
+  const dirMul = _sort.dir === 'asc' ? 1 : -1;
+  list = list.slice().sort((a, b) => {
+    const va = accessor(a), vb = accessor(b);
+    if (va < vb) return -1 * dirMul;
+    if (va > vb) return 1 * dirMul;
+    return 0;
+  });
+
+  const total = list.length;
+  const shown = Math.min(_pageLimit, total);
+
+  // Update sortable header indicators
+  document.querySelectorAll('#tab-clientes th.sortable').forEach(th => {
+    const col = th.dataset.sort;
+    th.classList.toggle('asc', col === _sort.col && _sort.dir === 'asc');
+    th.classList.toggle('desc', col === _sort.col && _sort.dir === 'desc');
+  });
+
+  if (!total) {
+    tbody.innerHTML = '';
+    const hasFilter = q || _showInactive;
+    empty.innerHTML = hasFilter
+      ? `<div class="ei"><i data-lucide="search-x" style="width:40px;height:40px"></i></div>
+         <p>Ningún cliente coincide con tu búsqueda.</p>
+         <button class="btn bg empty-cta" onclick="document.getElementById('qc').value='';renderClientes()"><i data-lucide="x" style="width:13px;height:13px"></i> Limpiar búsqueda</button>`
+      : `<div class="ei"><i data-lucide="users" style="width:40px;height:40px"></i></div>
+         <p>Aún no hay clientes registrados.</p>
+         <p style="font-size:12px;margin-top:4px">Los clientes se crean al registrar un pedido.</p>
+         <button class="btn bp empty-cta" onclick="showTab('pedidos')"><i data-lucide="plus" style="width:13px;height:13px"></i> Nuevo pedido</button>`;
+    empty.style.display = 'block';
+    refreshIcons(empty);
+    _updatePagBar(shown, total);
+    return;
+  }
   empty.style.display = 'none';
 
-  tbody.innerHTML = list.map(c => {
+  const page = list.slice(0, shown);
+  tbody.innerHTML = page.map(c => {
     const col = muniColor(c.municipio);
     const inactive = c.activo === false;
     return `<tr${inactive ? ' style="opacity:0.5"' : ''}>
@@ -167,9 +231,9 @@ export function renderClientes() {
       <td data-label="Pedido" class="mob-det">${c.numPedido ? `<code>${esc(c.numPedido)}</code>` : '<span class="mu">—</span>'}</td>
       <td class="td-act nw">
         ${inactive
-          ? `<button class="btn bg bsm" onclick="restoreCliente(${c.id})" title="Restaurar"><i data-lucide="rotate-ccw" style="width:12px;height:12px"></i></button>`
-          : `<button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar"><i data-lucide="pencil" style="width:12px;height:12px"></i></button>
-             <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`
+          ? `<button class="btn bg bsm" onclick="restoreCliente(${c.id})" title="Restaurar" aria-label="Restaurar cliente"><i data-lucide="rotate-ccw" style="width:12px;height:12px" aria-hidden="true"></i></button>`
+          : `<button class="btn bw bsm" onclick="openClienteModal(${c.id})" title="Editar" aria-label="Editar cliente"><i data-lucide="pencil" style="width:12px;height:12px" aria-hidden="true"></i></button>
+             <button class="btn bd bsm" onclick="deleteCliente(${c.id})" title="Eliminar" aria-label="Eliminar cliente"><i data-lucide="trash-2" style="width:12px;height:12px" aria-hidden="true"></i></button>`
         }
       </td></tr>`;
   }).join('');
@@ -178,6 +242,21 @@ export function renderClientes() {
   badge(activeCount + ' clientes');
   refreshIcons(tbody);
   initMobileRows(tbody);
+  _updatePagBar(shown, total);
+}
+
+function _updatePagBar(shown, total) {
+  const bar = document.getElementById('cli-pag');
+  if (!bar) return;
+  if (total <= 50) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <div class="pg-info">Mostrando <b>${shown}</b> de <b>${total}</b> clientes</div>
+    ${shown < total
+      ? `<button class="pg-more" onclick="loadMoreClientes()"><i data-lucide="chevron-down" style="width:13px;height:13px" aria-hidden="true"></i> Cargar 50 más</button>`
+      : `<span class="pg-info">Todos mostrados</span>`
+    }`;
+  refreshIcons(bar);
 }
 
 export function exportClientes() {

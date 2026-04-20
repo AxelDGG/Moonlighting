@@ -1,7 +1,7 @@
 import { state, aFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort } from '../utils.js';
-import { toast, openOv, closeOv, initMobileRows } from '../ui.js';
+import { toast, openOv, closeOv, initMobileRows, confirmDialog } from '../ui.js';
 import { refreshIcons } from '../icons.js';
 
 const FIXED_ZONAS = ['Bodega', 'Casa'];
@@ -129,7 +129,10 @@ export async function submitAlmacen(e) {
 }
 
 export async function deleteAlmacen(id) {
-  if (!confirm('¿Eliminar esta entrada de inventario?')) return;
+  const ok = await confirmDialog('¿Eliminar esta entrada de inventario? No podrás recuperarla.', {
+    title: 'Eliminar entrada', confirmLabel: 'Eliminar', variant: 'danger',
+  });
+  if (!ok) return;
   try {
     await api.almacenamiento.delete(id);
     state.almacenamiento = state.almacenamiento.filter(x => x.id !== id);
@@ -173,7 +176,10 @@ export async function submitVehiculo(e) {
 
 export async function deleteVehiculo(id) {
   const v = state.vehiculos.find(x => x.id === id);
-  if (!confirm(`¿Eliminar "${v?.nombre}"?`)) return;
+  const ok = await confirmDialog(`¿Eliminar "${v?.nombre}"? Los pedidos asignados a este vehículo quedarán sin vehículo.`, {
+    title: 'Eliminar vehículo', confirmLabel: 'Eliminar', variant: 'danger',
+  });
+  if (!ok) return;
   try {
     await api.vehiculos.delete(id);
     state.vehiculos = state.vehiculos.filter(x => x.id !== id);

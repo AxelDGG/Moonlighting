@@ -1,7 +1,7 @@
 import { state, isAdmin } from '../state.js';
 import { api } from '../api.js';
 import { esc } from '../utils.js';
-import { toast } from '../ui.js';
+import { toast, confirmDialog } from '../ui.js';
 import { refreshIcons } from '../icons.js';
 
 const PERM_LABELS = {
@@ -204,7 +204,10 @@ export async function cfgAddVehiculo() {
 
 export async function cfgDeleteVehiculo(id) {
   const v = (state.vehiculos || []).find(x => x.id === id);
-  if (!confirm(`¿Eliminar "${v?.nombre}"?`)) return;
+  const ok = await confirmDialog(`¿Eliminar "${v?.nombre}"?`, {
+    title: 'Eliminar vehículo', confirmLabel: 'Eliminar', variant: 'danger',
+  });
+  if (!ok) return;
   try {
     await api.vehiculos.delete(id);
     state.vehiculos = (state.vehiculos || []).filter(x => x.id !== id);

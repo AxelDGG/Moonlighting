@@ -1,7 +1,7 @@
 import { state, smFromDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, fdate, tipoPill, statusPill, calcRetrasoMin, calcDuracionMin, money } from '../utils.js';
-import { toast, openOv, closeOv } from '../ui.js';
+import { toast, openOv, closeOv, promptDialog } from '../ui.js';
 import { renderPedidos } from './pedidos.js';
 import { STATUS_COLORS } from '../constants.js';
 import { refreshIcons } from '../icons.js';
@@ -177,7 +177,14 @@ export async function saveMotivo(smId, tipo, val) {
 }
 
 export async function cancelService(smId) {
-  const motivo = prompt('Motivo de cancelación:'); if (motivo === null) return;
+  const motivo = await promptDialog('Cuéntanos por qué se cancela — aparecerá en el seguimiento.', {
+    title: 'Cancelar servicio',
+    placeholder: 'Ej: Cliente reagendó, clima, falta de acceso…',
+    confirmLabel: 'Cancelar servicio',
+    cancelLabel: 'Volver',
+    multiline: true,
+  });
+  if (motivo === null) return;
   try {
     const payload = { estado: 'cancelado', motivo_cancelacion: motivo || 'No especificado' };
     await api.metricas.update(smId, payload);

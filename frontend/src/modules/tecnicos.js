@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { api } from '../api.js';
 import { esc } from '../utils.js';
-import { toast, openOv, closeOv } from '../ui.js';
+import { toast, openOv, closeOv, confirmDialog } from '../ui.js';
 import { refreshIcons } from '../icons.js';
 
 // ── LISTA ─────────────────────────────────────────────────────────────────────
@@ -126,7 +126,11 @@ export async function submitTecnico(e) {
 // ── DELETE (desactiva, no borra) ──────────────────────────────────────────────
 export async function deleteTecnico(id) {
   const t = (state.tecnicos || []).find(x => x.id === id);
-  if (!confirm(`¿Desactivar a ${t?.nombre || 'este técnico'}?`)) return;
+  const ok = await confirmDialog(
+    `El técnico quedará inactivo y no podrá ser asignado a nuevos servicios.`,
+    { title: `Desactivar a ${t?.nombre || 'técnico'}`, confirmLabel: 'Desactivar', variant: 'warn' }
+  );
+  if (!ok) return;
   try {
     await api.tecnicos.delete(id);
     const i = (state.tecnicos || []).findIndex(x => x.id === id);

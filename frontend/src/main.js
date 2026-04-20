@@ -1,15 +1,15 @@
 import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
 import { state, cFromDb, pFromDb, pdFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
-import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
+import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners, confirmDialog } from './ui.js';
 
 import { renderDash } from './modules/dashboard.js';
-import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, restoreCliente, exportClientes, toggleShowInactive } from './modules/clientes.js';
+import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, restoreCliente, exportClientes, toggleShowInactive, sortClientes, loadMoreClientes } from './modules/clientes.js';
 import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
          onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled,
          triggerNcGeoPreview, onNcUrlInput,
-         addLinea, removeLinea, togglePedidoExpand } from './modules/pedidos.js';
+         addLinea, removeLinea, togglePedidoExpand, loadMorePedidos } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
@@ -240,8 +240,104 @@ async function loadUserProfile() {
 }
 
 async function doLogout() {
+  const ok = await confirmDialog('¿Cerrar sesión? Tendrás que volver a iniciar sesión para acceder a la app.', {
+    title: 'Cerrar sesión',
+    confirmLabel: 'Cerrar sesión',
+    cancelLabel: 'Cancelar',
+    variant: 'info',
+  });
+  if (!ok) return;
   await logout();
   location.reload();
+}
+
+/* ── THEME TOGGLE ── */
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const effective = current || (systemDark ? 'dark' : 'light');
+  const next = effective === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (_) {}
+  updateThemeIcon(next);
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const iconName = theme === 'dark' ? 'sun' : 'moon';
+  btn.innerHTML = `<i data-lucide="${iconName}" aria-hidden="true"></i>`;
+  if (window.lucide) try { window.lucide.createIcons({ nodes: btn.querySelectorAll('[data-lucide]') }); } catch (_) {}
+}
+
+function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('theme'); } catch (_) {}
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const effective = saved || (systemDark ? 'dark' : 'light');
+  updateThemeIcon(effective);
+}
+
+/* ── OFFLINE INDICATOR ── */
+function setOnlineStatus(online) {
+  const pill = document.getElementById('offline-indicator');
+  if (pill) pill.style.display = online ? 'none' : 'inline-flex';
+}
+
+function initOnlineStatus() {
+  setOnlineStatus(navigator.onLine);
+  window.addEventListener('online', () => {
+    setOnlineStatus(true);
+    toast('Conexión restaurada', 'ok');
+  });
+  window.addEventListener('offline', () => {
+    setOnlineStatus(false);
+    toast('Sin conexión — trabajando en modo local', 'warn', { duration: 5000 });
+  });
+}
+
+/* ── KEYBOARD SHORTCUTS ── */
+function initShortcuts() {
+  document.addEventListener('keydown', e => {
+    // Skip if user is typing in an input/textarea
+    const tag = e.target.tagName;
+    const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable;
+    if (isTyping) return;
+
+    // "/" — focus first visible search input in active tab
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+      const activeTab = document.querySelector('.tab.active');
+      const search = activeTab?.querySelector('.si, input[type="search"], input[placeholder*="Buscar"]');
+      if (search) { e.preventDefault(); search.focus(); search.select?.(); }
+    }
+
+    // "?" — show shortcuts hint
+    if (e.key === '?' && e.shiftKey) {
+      toast('Atajos: / buscar · Esc cerrar modal · g+d dashboard · g+c clientes · g+p pedidos', 'info', { duration: 5000 });
+    }
+
+    // "g" then letter — go to tab
+    if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+      const onNext = ev => {
+        const m = { d: 'dashboard', c: 'clientes', p: 'pedidos', a: 'almacen', k: 'cal', m: 'mapa', e: 'metricas' };
+        const dest = m[ev.key];
+        if (dest && document.getElementById('nav-' + dest)?.style.display !== 'none') showTab(dest);
+        document.removeEventListener('keydown', onNext, true);
+      };
+      setTimeout(() => document.addEventListener('keydown', onNext, { once: true, capture: true }), 0);
+      setTimeout(() => document.removeEventListener('keydown', onNext, true), 1200);
+    }
+  });
+}
+
+/* ── SERVICE WORKER ── */
+function initServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  if (import.meta.env.DEV) return; // avoid caching Vite HMR assets
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* noop */ });
+  });
 }
 
 function showApp() {
@@ -266,15 +362,26 @@ async function init() {
     showApp();
     await loadAll();
     applyRoleRestrictions();
+    _handleUrlTab();
   } else {
     showLogin();
   }
+}
+
+// Permite enlaces como /?tab=tecnico desde atajos del manifest
+function _handleUrlTab() {
+  const params = new URLSearchParams(location.search);
+  const wanted = params.get('tab');
+  if (!wanted) return;
+  const nav = document.getElementById('nav-' + wanted);
+  if (nav && nav.style.display !== 'none') showTab(wanted);
 }
 
 /* ── EXPOSE TO HTML ── */
 window.showTab       = showTab;
 window.toggleSidebar = toggleSidebar;
 window.doLogout      = doLogout;
+window.toggleTheme   = toggleTheme;
 
 // Clientes
 window.openClienteModal = openClienteModal;
@@ -286,6 +393,8 @@ window.restoreCliente      = restoreCliente;
 window.exportClientes      = exportClientes;
 window.renderClientes      = renderClientes;
 window.toggleShowInactive  = toggleShowInactive;
+window.sortClientes        = sortClientes;
+window.loadMoreClientes    = loadMoreClientes;
 
 // Pedidos
 window.openPedidoModal  = openPedidoModal;
@@ -311,6 +420,7 @@ window.toggleShowCancelled   = toggleShowCancelled;
 window.addLinea              = addLinea;
 window.removeLinea           = removeLinea;
 window.togglePedidoExpand    = togglePedidoExpand;
+window.loadMorePedidos       = loadMorePedidos;
 
 // Calendar
 window.renderCal          = renderCal;
@@ -386,6 +496,10 @@ window.renderTecnicoView   = renderTecnicoView;
 
 document.addEventListener('DOMContentLoaded', () => {
   initOverlayListeners();
+  initTheme();
+  initOnlineStatus();
+  initShortcuts();
+  initServiceWorker();
   if (window.lucide) try { window.lucide.createIcons(); } catch (_) {}
   init();
 });
