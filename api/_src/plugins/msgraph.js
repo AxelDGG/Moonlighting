@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { estimatePedidoDurationMin, addMinutesHHMM } from '../durations.js';
 
 export default fp(async (fastify) => {
   const { MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MS_CALENDAR_USER } = process.env;
@@ -31,20 +32,15 @@ export default fp(async (fastify) => {
     return _token;
   }
 
-  function addOneHour(hhmm) {
-    const [h, m] = hhmm.split(':').map(Number);
-    const d = new Date(2000, 0, 1, h + 1, m);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
-
-  function buildEventPayload(pedido, metrica, cliente) {
+  function buildEventPayload(pedido, metrica, cliente, lineas) {
     const ICONS = { Abanico: '🪭', Persiana: '🪟', Levantamiento: '📐', Limpieza: '🧹', Mantenimiento: '🔧' };
     const ic     = ICONS[pedido.tipo_servicio] || '📋';
     const tipo   = pedido.tipo_servicio || 'Servicio';
     const nombre = cliente?.nombre || 'Sin cliente';
     const tel    = cliente?.numero || cliente?.telefono || '';
     const hora   = (metrica?.hora_programada || '08:00').slice(0, 5);
-    const fin    = (metrica?.hora_fin || addOneHour(hora)).slice(0, 5);
+    const duracionEst = estimatePedidoDurationMin(tipo, lineas, pedido.cantidad);
+    const fin    = (metrica?.hora_fin || addMinutesHHMM(hora, duracionEst)).slice(0, 5);
     const municipio = cliente?.municipio || '';
     const zona   = cliente?.zona || metrica?.zona || '';
     const zonaLabel = zona && municipio ? `${municipio} ${zona}` : (municipio || zona || '');

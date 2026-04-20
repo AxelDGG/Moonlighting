@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import { esc, money, fdate, todayStr, tipoPill, statusPill, pillPago, pedidoDetalle, muniColor } from '../utils.js';
 import { TIPO_IC, TIPO_BG, TIPO_CO, STATUS_COLORS } from '../constants.js';
 import { refreshIcons } from '../icons.js';
+import { estimatePedidoDurationMin, fmtDuracion, addMinutesHHMM } from '../durations.js';
 
 let calMode = 'week';
 let calDate = new Date();
@@ -210,7 +211,18 @@ function renderCalDay() {
           ${c ? `<span style="display:flex;align-items:center;gap:3px"><i data-lucide="phone" style="width:11px;height:11px"></i> ${esc(c.numero)}</span><span>${pillPago(c.metodoPago)}</span>` : ''}
           <span style="font-weight:700;color:var(--ok)">${money(p.total)}</span>
           <span class="mu">Qty: ${p.cantidad}</span>
-          ${sm?.hora_programada ? `<span class="mu" style="display:flex;align-items:center;gap:3px"><i data-lucide="clock" style="width:11px;height:11px"></i> ${sm.hora_programada}</span>` : ''}
+          ${sm?.hora_programada ? `<span class="mu" style="display:flex;align-items:center;gap:3px"><i data-lucide="clock" style="width:11px;height:11px"></i> ${sm.hora_programada}${(() => {
+            const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+            const lParaEst = lineas.length ? lineas : [{ cantidad: p.cantidad || 1, sistemaInstalacion: p.detalles?.instalacion || null, nDesins: p.detalles?.nDesins || 0 }];
+            const dur = estimatePedidoDurationMin(p.tipoServicio, lParaEst);
+            const fin = addMinutesHHMM(sm.hora_programada, dur);
+            return fin ? `<span style="margin-left:3px;opacity:.75">→ ${fin} · ${fmtDuracion(dur)}</span>` : '';
+          })()}</span>` : (() => {
+            const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+            const lParaEst = lineas.length ? lineas : [{ cantidad: p.cantidad || 1, sistemaInstalacion: p.detalles?.instalacion || null, nDesins: p.detalles?.nDesins || 0 }];
+            const dur = estimatePedidoDurationMin(p.tipoServicio, lParaEst);
+            return `<span class="mu" style="display:flex;align-items:center;gap:3px"><i data-lucide="hourglass" style="width:11px;height:11px"></i> ${fmtDuracion(dur)}</span>`;
+          })()}
         </div>
       </div>
       ${!cancelled ? `<div style="display:flex;flex-direction:column;gap:4px">

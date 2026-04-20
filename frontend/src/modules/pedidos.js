@@ -1,6 +1,7 @@
 import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb, pdFromDb, pdToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
+import { SUBTIPO_ABANICO, SUBTIPO_MANTENIMIENTO, estimatePedidoDurationMin, fmtDuracion } from '../durations.js';
 import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
@@ -297,6 +298,7 @@ function blankLinea() {
     modelo: '', cantidad: 1, precioUnit: 0, stock: null,
     nDesins: 0, ancho: '', alto: '',
     instalacion: 'interior', tipoTela: '', notas: '',
+    subTipo: '',
     acIdx: -1,
   };
 }
@@ -314,6 +316,7 @@ function syncDomToLineas() {
     if (get('p-tela'))    l.tipoTela    = get('p-tela').value.trim();
     if (get('p-notas'))   l.notas       = get('p-notas').value.trim();
     if (get('p-precio'))  l.precioUnit  = parseFloat(get('p-precio').value) || 0;
+    if (get('p-subtipo')) l.subTipo     = get('p-subtipo').value;
   });
 }
 
@@ -341,6 +344,8 @@ function lineaCardHtml(tipo, l, i, solo) {
 
   let body = '';
   if (tipo === 'Abanico') {
+    const subOpts = SUBTIPO_ABANICO.map(s =>
+      `<option value="${s}"${l.subTipo === s ? ' selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('');
     body = `
       <div class="fi full">
         <label>Modelo *</label>
@@ -351,6 +356,12 @@ function lineaCardHtml(tipo, l, i, solo) {
           <div class="ac-list" id="ac-modelo-${i}"></div>
         </div>
         <div id="modelo-info-${i}" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+      </div>
+      <div class="fi"><label>Instalación</label>
+        <select id="p-subtipo-${i}" onchange="calcPedidoTotal()">
+          <option value=""${!l.subTipo ? ' selected' : ''}>— Plafón —</option>
+          ${subOpts}
+        </select>
       </div>
       <div class="fi"><label>Cant. *</label>
         <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
@@ -389,6 +400,15 @@ function lineaCardHtml(tipo, l, i, solo) {
   } else {
     // Limpieza / Levantamiento / Mantenimiento
     const modeloLabel = tipo === 'Limpieza' ? 'Modelo' : 'Descripción';
+    const mantSubtipoHtml = tipo === 'Mantenimiento'
+      ? `<div class="fi"><label>Tipo</label>
+          <select id="p-subtipo-${i}" onchange="calcPedidoTotal()">
+            <option value=""${!l.subTipo ? ' selected' : ''}>— Abanico plafón —</option>
+            ${SUBTIPO_MANTENIMIENTO.map(s =>
+              `<option value="${s}"${l.subTipo === s ? ' selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('')}
+          </select>
+        </div>`
+      : '';
     body = `
       <div class="fi full">
         <label>${modeloLabel}</label>
@@ -397,6 +417,7 @@ function lineaCardHtml(tipo, l, i, solo) {
       <div class="fi full"><label>Notas</label>
         <textarea id="p-notas-${i}" rows="2" oninput="calcPedidoTotal()">${esc(l.notas)}</textarea>
       </div>
+      ${mantSubtipoHtml}
       <div class="fi"><label>Cant. *</label>
         <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
       </div>
@@ -492,6 +513,19 @@ export function calcPedidoTotal() {
 
   const totalEl = document.getElementById('p-total');
   if (totalEl) totalEl.value = total.toFixed(2);
+
+  // Duración estimada según tipo de servicio + instalación + cantidad
+  const durWrap = document.getElementById('p-duracion-wrap');
+  const durTxt  = document.getElementById('p-duracion-txt');
+  if (durWrap && durTxt) {
+    if (tipo) {
+      const minutos = estimatePedidoDurationMin(tipo, lineasForm);
+      durTxt.textContent = fmtDuracion(minutos);
+      durWrap.style.display = '';
+    } else {
+      durWrap.style.display = 'none';
+    }
+  }
 }
 
 // ── AUTOCOMPLETE HELPERS ─────────────────────────────────────────────────────
@@ -748,6 +782,7 @@ function _lineaFromDetalle(d, tipo) {
   if (tipo === 'Abanico') {
     l.modelo  = d.modeloAbanico || d.descripcion || '';
     l.nDesins = d.desinstalarCantidad || 0;
+    l.subTipo = d.sistemaInstalacion || '';
     const agg = getAggregated('abanico').find(m => m.modelo === l.modelo);
     if (agg) l.stock = agg.cantidad;
   } else if (tipo === 'Persiana') {
@@ -760,6 +795,7 @@ function _lineaFromDetalle(d, tipo) {
   } else {
     l.modelo = d.descripcion || '';
     l.notas  = d.notas || '';
+    if (tipo === 'Mantenimiento') l.subTipo = d.sistemaInstalacion || '';
   }
   return l;
 }
@@ -778,6 +814,7 @@ function _lineaToDetalle(tipo, l) {
       unidadMedida: 'pieza',
       modeloAbanico: l.modelo || null,
       desinstalarCantidad: l.nDesins || null,
+      sistemaInstalacion: l.subTipo || null,
     };
   }
   if (tipo === 'Persiana') {
@@ -796,6 +833,7 @@ function _lineaToDetalle(tipo, l) {
     descripcion: l.modelo || tipo || 'Servicio',
     unidadMedida: 'pieza',
     notas: l.notas || null,
+    sistemaInstalacion: tipo === 'Mantenimiento' ? (l.subTipo || null) : null,
   };
 }
 

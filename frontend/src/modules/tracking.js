@@ -5,6 +5,7 @@ import { toast, openOv, closeOv } from '../ui.js';
 import { renderPedidos } from './pedidos.js';
 import { STATUS_COLORS } from '../constants.js';
 import { refreshIcons } from '../icons.js';
+import { estimatePedidoDurationMin, fmtDuracion, addMinutesHHMM } from '../durations.js';
 
 function _detectCategoria(tipoServicio) {
   const ts = (tipoServicio || '').toLowerCase();
@@ -81,6 +82,16 @@ export function renderTrackBody(sm, p, c) {
   const estado = sm.estado;
   const retraso = calcRetrasoMin(sm.hora_programada, sm.hora_llegada);
   const duracion = calcDuracionMin(sm.hora_inicio, sm.hora_fin);
+  const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+  const lineasParaEstimar = lineas.length ? lineas : [{
+    cantidad: p.cantidad || 1,
+    sistemaInstalacion: p.detalles?.instalacion || null,
+    nDesins: p.detalles?.nDesins || 0,
+  }];
+  const duracionEst = estimatePedidoDurationMin(p.tipoServicio, lineasParaEstimar);
+  const horaEstFin = sm.hora_inicio
+    ? addMinutesHHMM(sm.hora_inicio, duracionEst)
+    : (sm.hora_programada ? addMinutesHHMM(sm.hora_programada, duracionEst) : null);
   let html = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:10px">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:600">${c ? esc(c.nombre) : 'Sin cliente'}</div>
@@ -118,7 +129,16 @@ export function renderTrackBody(sm, p, c) {
     </div>`;
   });
   html += '</div>';
-  if (duracion !== null) html += `<div style="padding:10px 14px;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:12.5px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:6px"><i data-lucide="timer" style="width:14px;height:14px"></i> Duración total: ${duracion} minutos</div>`;
+  if (duracion !== null) {
+    const delta = duracion - duracionEst;
+    const deltaTxt = Math.abs(delta) >= 5
+      ? ` <span style="font-weight:500;opacity:.8">· ${delta > 0 ? '+' : ''}${delta} vs estimado</span>`
+      : '';
+    html += `<div style="padding:10px 14px;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:12.5px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:6px"><i data-lucide="timer" style="width:14px;height:14px"></i> Duración total: ${duracion} minutos${deltaTxt}</div>`;
+  } else if (duracionEst) {
+    const hint = horaEstFin ? ` · estimado termina ~${horaEstFin}` : '';
+    html += `<div style="padding:10px 14px;border-radius:8px;background:#f1f5f9;color:#475569;font-size:12.5px;font-weight:500;margin-top:4px;display:flex;align-items:center;gap:6px"><i data-lucide="hourglass" style="width:14px;height:14px"></i> Duración estimada: ${fmtDuracion(duracionEst)}${hint}</div>`;
+  }
   if (estado === 'atrasado' || (retraso && retraso > 0)) {
     html += `<div style="margin-top:14px"><div style="font-size:10.5px;font-weight:600;color:var(--mu);text-transform:uppercase;margin-bottom:4px">Motivo del retraso</div>
       <select onchange="saveMotivo(${sm.id},'retraso',this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--bo);border-radius:7px;font-size:13px">

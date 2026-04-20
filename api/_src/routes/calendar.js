@@ -28,8 +28,11 @@ export default async function calendarRoutes(fastify) {
       ? (await fastify.supabase.from('clientes').select('*').eq('id', pedido.cliente_id).single()).data
       : null;
 
+    const { data: lineas } = await fastify.supabase
+      .from('pedido_detalle').select('*').eq('pedido_id', pedidoId);
+
     try {
-      const payload         = fastify.msGraph.buildEventPayload(pedido, metrica, cliente);
+      const payload         = fastify.msGraph.buildEventPayload(pedido, metrica, cliente, lineas || []);
       const existingEventId = pedido.detalles?.outlook_event_id;
 
       let eventId;
