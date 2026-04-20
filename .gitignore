@@ -7,7 +7,9 @@ frontend/.env
 *.log
 .vercel/
 .agent/
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/**/__pycache__/
 
 .vercel
 .env*.local
