@@ -146,6 +146,16 @@ export default async function pedidosRoutes(fastify) {
     return reply.code(201).send(data);
   });
 
+  // GET /detalle/all - Obtener TODAS las líneas (para cargar estado inicial)
+  fastify.get('/detalle/all', async (req, reply) => {
+    const { data, error } = await fastify.supabase
+      .from('pedido_detalle')
+      .select('*')
+      .order('id');
+    if (error) return reply.code(500).send({ error: 'Error al cargar detalle' });
+    return data;
+  });
+
   // GET /:id/detalle - Obtener detalle
   fastify.get('/:id/detalle', {
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
@@ -170,6 +180,41 @@ export default async function pedidosRoutes(fastify) {
       .from('pedido_detalle').update(req.body).eq('id', req.params.id);
     if (error) return reply.code(500).send({ error: 'Error al actualizar línea' });
     return reply.code(204).send();
+  });
+
+  // POST /:id/detalle/bulk - Reemplazar TODAS las líneas del pedido atómicamente
+  fastify.post('/:id/detalle/bulk', {
+    preHandler: mutate,
+    schema: {
+      params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
+      body: {
+        type: 'object',
+        properties: {
+          lineas: { type: 'array', items: detalleBodySchema },
+        },
+        required: ['lineas'],
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
+    const pedidoId = req.params.id;
+    const lineas = (req.body.lineas || []).map(l => ({ ...l, pedido_id: pedidoId }));
+
+    const { error: delErr } = await fastify.supabase
+      .from('pedido_detalle').delete().eq('pedido_id', pedidoId);
+    if (delErr) {
+      req.log.error({ err: delErr }, 'bulk detalle delete failed');
+      return reply.code(500).send({ error: 'Error al reemplazar detalle' });
+    }
+    if (!lineas.length) return reply.code(200).send([]);
+
+    const { data, error } = await fastify.supabase
+      .from('pedido_detalle').insert(lineas).select();
+    if (error) {
+      req.log.error({ err: error }, 'bulk detalle insert failed');
+      return reply.code(500).send({ error: 'Error al insertar detalle' });
+    }
+    return reply.code(200).send(data);
   });
 
   // DELETE /detalle/:id - Eliminar línea

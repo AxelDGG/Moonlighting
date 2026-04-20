@@ -1,6 +1,6 @@
 import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
-import { state, cFromDb, pFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
+import { state, cFromDb, pFromDb, pdFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
 import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
 
 import { renderDash } from './modules/dashboard.js';
@@ -8,7 +8,8 @@ import { renderClientes, openClienteModal, submitCliente, editPago, savePago, de
 import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedidos, updatePF, calcExtra, setCliMode,
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
          onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled,
-         triggerNcGeoPreview, onNcUrlInput } from './modules/pedidos.js';
+         triggerNcGeoPreview, onNcUrlInput,
+         addLinea, removeLinea, togglePedidoExpand } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
@@ -135,9 +136,10 @@ async function loadAll() {
   setLoader(true, 'Cargando datos…');
   const errores = [];
   try {
-    const [clientesR, pedidosR, metricasR, almacenR, tecnicosR, routesR, vehiR] = await Promise.allSettled([
+    const [clientesR, pedidosR, detalleR, metricasR, almacenR, tecnicosR, routesR, vehiR] = await Promise.allSettled([
       api.clientes.getAll(),
       api.pedidos.getAll(),
+      api.pedidos.allDetalle(),
       api.metricas.getAll(),
       api.almacenamiento.getAll(),
       api.tecnicos.getAll(),
@@ -150,6 +152,9 @@ async function loadAll() {
 
     if (pedidosR.status === 'fulfilled') state.pedidos = pedidosR.value.map(pFromDb);
     else { state.pedidos = []; errores.push('pedidos'); }
+
+    if (detalleR.status === 'fulfilled') state.pedidoDetalle = (detalleR.value || []).map(pdFromDb);
+    else state.pedidoDetalle = [];
 
     if (metricasR.status === 'fulfilled') state.servicios_metricas = metricasR.value.map(smFromDb);
     else state.servicios_metricas = [];
@@ -303,6 +308,9 @@ window.onTelaKey        = onTelaKey;
 window.onTelaBlur       = onTelaBlur;
 window.selectTela            = selectTela;
 window.toggleShowCancelled   = toggleShowCancelled;
+window.addLinea              = addLinea;
+window.removeLinea           = removeLinea;
+window.togglePedidoExpand    = togglePedidoExpand;
 
 // Calendar
 window.renderCal          = renderCal;

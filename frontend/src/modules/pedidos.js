@@ -1,4 +1,4 @@
-import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb } from '../state.js';
+import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb, pdFromDb, pdToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
@@ -8,11 +8,11 @@ import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
 import { resolveLocation } from '../geocoding.js';
 
 let cliMode = 'ex';
-let selectedModeloPrecio = 0;
-let selectedTelaPrice    = 0;
-let modeloAcIdx = -1;
-let telaAcIdx   = -1;
 let _showCancelled = false;
+
+// Líneas del pedido en edición. Cada línea:
+//   { modelo, cantidad, precioUnit, nDesins, ancho, alto, instalacion, tipoTela, notas, acIdx, stock }
+let lineasForm = [];
 
 // ── Geocoding preview + mini mapa para nuevo cliente ─────────────────────────
 let _previewDebounce = null;
@@ -291,47 +291,207 @@ export function setCliMode(m) {
   ['nc-n', 'nc-t', 'nc-d'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
 }
 
+// ── LÍNEAS DEL PEDIDO ────────────────────────────────────────────────────────
+function blankLinea() {
+  return {
+    modelo: '', cantidad: 1, precioUnit: 0, stock: null,
+    nDesins: 0, ancho: '', alto: '',
+    instalacion: 'interior', tipoTela: '', notas: '',
+    acIdx: -1,
+  };
+}
+
+// Lee el DOM y vuelca los valores a lineasForm (fuente de verdad)
+function syncDomToLineas() {
+  lineasForm.forEach((l, i) => {
+    const get = (id) => document.getElementById(id + '-' + i);
+    if (get('p-modelo'))  l.modelo      = get('p-modelo').value.trim();
+    if (get('p-qty'))     l.cantidad    = Math.max(1, parseInt(get('p-qty').value) || 1);
+    if (get('p-ndesins')) l.nDesins     = parseInt(get('p-ndesins').value) || 0;
+    if (get('p-ancho'))   l.ancho       = parseFloat(get('p-ancho').value)  || 0;
+    if (get('p-alto'))    l.alto        = parseFloat(get('p-alto').value)   || 0;
+    if (get('p-inst'))    l.instalacion = get('p-inst').value;
+    if (get('p-tela'))    l.tipoTela    = get('p-tela').value.trim();
+    if (get('p-notas'))   l.notas       = get('p-notas').value.trim();
+    if (get('p-precio'))  l.precioUnit  = parseFloat(get('p-precio').value) || 0;
+  });
+}
+
+function subtotalLinea(tipo, l) {
+  if (tipo === 'Abanico')  return l.cantidad * l.precioUnit + l.nDesins * COSTO_DESINS_UD;
+  if (tipo === 'Persiana') {
+    const m2 = (l.ancho / 100) * (l.alto / 100);
+    return l.cantidad * m2 * l.precioUnit;
+  }
+  return l.cantidad * l.precioUnit;
+}
+
+function lineaCardHtml(tipo, l, i, solo) {
+  const removeBtn = solo
+    ? ''
+    : `<button type="button" class="btn bd bsm" onclick="removeLinea(${i})" title="Quitar" style="padding:4px 8px">
+         <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+       </button>`;
+
+  const header = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:600;font-size:12px;color:var(--mu)">Ítem ${i + 1}</span>
+      ${removeBtn}
+    </div>`;
+
+  let body = '';
+  if (tipo === 'Abanico') {
+    body = `
+      <div class="fi full">
+        <label>Modelo *</label>
+        <div class="ac-wrap">
+          <input id="p-modelo-${i}" type="text" autocomplete="off" required value="${esc(l.modelo)}"
+                 placeholder="Escribe para buscar modelo…"
+                 oninput="onModeloInput(${i})" onkeydown="onModeloKey(event,${i})" onblur="onModeloBlur(${i})"/>
+          <div class="ac-list" id="ac-modelo-${i}"></div>
+        </div>
+        <div id="modelo-info-${i}" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+      </div>
+      <div class="fi"><label>Cant. *</label>
+        <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
+      </div>
+      <div class="fi"><label>Desinstalar</label>
+        <input id="p-ndesins-${i}" type="number" min="0" value="${l.nDesins}" oninput="calcExtra(${i})"/>
+        <span id="desins-hint-${i}" style="font-size:11px;color:var(--wa)"></span>
+      </div>`;
+  } else if (tipo === 'Persiana') {
+    body = `
+      <div class="fi full">
+        <label>Tela</label>
+        <div class="ac-wrap">
+          <input id="p-tela-${i}" type="text" autocomplete="off" value="${esc(l.tipoTela)}"
+                 placeholder="Escribe para buscar tela…"
+                 oninput="onTelaInput(${i})" onkeydown="onTelaKey(event,${i})" onblur="onTelaBlur(${i})"/>
+          <div class="ac-list" id="ac-tela-${i}"></div>
+        </div>
+        <div id="tela-info-${i}" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+      </div>
+      <div class="fi"><label>Ancho (cm)</label>
+        <input id="p-ancho-${i}" type="number" value="${l.ancho || ''}" required oninput="calcPedidoTotal()"/>
+      </div>
+      <div class="fi"><label>Alto (cm)</label>
+        <input id="p-alto-${i}" type="number" value="${l.alto || ''}" required oninput="calcPedidoTotal()"/>
+      </div>
+      <div class="fi"><label>Instalación</label>
+        <select id="p-inst-${i}" onchange="calcPedidoTotal()">
+          <option value="interior"${l.instalacion === 'interior' ? ' selected' : ''}>Interior</option>
+          <option value="exterior"${l.instalacion === 'exterior' ? ' selected' : ''}>Exterior</option>
+        </select>
+      </div>
+      <div class="fi"><label>Cant. *</label>
+        <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
+      </div>`;
+  } else {
+    // Limpieza / Levantamiento / Mantenimiento
+    const modeloLabel = tipo === 'Limpieza' ? 'Modelo' : 'Descripción';
+    body = `
+      <div class="fi full">
+        <label>${modeloLabel}</label>
+        <input id="p-modelo-${i}" type="text" value="${esc(l.modelo)}" oninput="calcPedidoTotal()"/>
+      </div>
+      <div class="fi full"><label>Notas</label>
+        <textarea id="p-notas-${i}" rows="2" oninput="calcPedidoTotal()">${esc(l.notas)}</textarea>
+      </div>
+      <div class="fi"><label>Cant. *</label>
+        <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
+      </div>
+      <div class="fi"><label>Precio unit. ($)</label>
+        <input id="p-precio-${i}" type="number" min="0" step="0.01" value="${l.precioUnit || 0}" oninput="calcPedidoTotal()"/>
+      </div>`;
+  }
+
+  const sub = subtotalLinea(tipo, l);
+  const footer = `
+    <div style="display:flex;justify-content:flex-end;margin-top:4px;font-size:12px;color:var(--mu)">
+      Subtotal: <b class="grn" style="margin-left:6px">${money(sub)}</b>
+    </div>`;
+
+  return `<div class="linea-card" data-idx="${i}" style="border:1px solid var(--bo);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--bg)">
+    ${header}
+    <div class="fg" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">${body}</div>
+    ${footer}
+  </div>`;
+}
+
+function renderLineas() {
+  const tipo = document.getElementById('p-tipo').value;
+  const cont = document.getElementById('p-lineas');
+  if (!cont) return;
+  if (!tipo) { cont.innerHTML = ''; return; }
+  if (!lineasForm.length) lineasForm = [blankLinea()];
+  const solo = lineasForm.length === 1;
+  cont.innerHTML = lineasForm.map((l, i) => lineaCardHtml(tipo, l, i, solo)).join('');
+  refreshIcons(cont);
+
+  // Si hay precios auto-detectados (modelo/tela con match en catálogo), poblar el info-badge
+  lineasForm.forEach((l, i) => {
+    if (tipo === 'Abanico' && l.precioUnit > 0 && l.modelo) {
+      _updateModeloInfo(i, l.modelo, l.precioUnit, l.stock);
+    } else if (tipo === 'Persiana' && l.precioUnit > 0 && l.tipoTela) {
+      _updateTelaInfo(i, l.precioUnit, l.stock);
+    }
+  });
+}
+
+export function addLinea() {
+  syncDomToLineas();
+  lineasForm.push(blankLinea());
+  renderLineas();
+  calcPedidoTotal();
+}
+
+export function removeLinea(idx) {
+  syncDomToLineas();
+  if (lineasForm.length <= 1) return;
+  lineasForm.splice(idx, 1);
+  renderLineas();
+  calcPedidoTotal();
+}
+
 // ── FORM VISIBILITY ──────────────────────────────────────────────────────────
 export function updatePF() {
   const tipo = document.getElementById('p-tipo').value;
-  const isAb = tipo === 'Abanico', isPe = tipo === 'Persiana', isLi = tipo === 'Limpieza';
-  const hasNotas = ['Levantamiento', 'Limpieza', 'Mantenimiento'].includes(tipo);
   const show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; };
-  show('r-ab-hd', isAb); show('r-modelo', isAb || isLi); show('r-ndesins', isAb);
-  show('r-pe-hd', isPe); show('r-ancho', isPe); show('r-alto', isPe); show('r-inst', isPe); show('r-tela', isPe);
-  show('r-nt-hd', hasNotas); show('r-notas', hasNotas);
-  const setReq = (id, v) => { const el = document.getElementById(id); if (el) el.required = v; };
-  setReq('p-modelo', isAb); setReq('p-ancho', isPe); setReq('p-alto', isPe);
-  // Reset autocomplete state when type changes
-  selectedModeloPrecio = 0; selectedTelaPrice = 0;
-  const mi = document.getElementById('modelo-info'); if (mi) mi.innerHTML = '';
-  const ti = document.getElementById('tela-info');   if (ti) ti.innerHTML = '';
+  const hasTipo = !!tipo;
+  show('r-lineas-hd', hasTipo);
+  show('r-lineas',    hasTipo);
+  // Al cambiar de tipo, vaciar líneas (los campos no son compatibles entre tipos)
+  lineasForm = [blankLinea()];
+  renderLineas();
+  calcPedidoTotal();
 }
 
-// ── DESINSTALACIÓN HINT ──────────────────────────────────────────────────────
-export function calcExtra() {
-  const n = parseInt(document.getElementById('p-ndesins').value) || 0;
-  const el = document.getElementById('desins-hint');
+// ── DESINSTALACIÓN HINT (por línea) ──────────────────────────────────────────
+export function calcExtra(idx) {
+  const n = parseInt(document.getElementById('p-ndesins-' + idx)?.value) || 0;
+  const el = document.getElementById('desins-hint-' + idx);
   if (el) el.textContent = n > 0 ? `+$${n * COSTO_DESINS_UD} por desinstalación` : '';
   calcPedidoTotal();
 }
 
 // ── TOTAL AUTO-CALCULATION ───────────────────────────────────────────────────
 export function calcPedidoTotal() {
+  syncDomToLineas();
   const tipo     = document.getElementById('p-tipo').value;
-  const qty      = parseInt(document.getElementById('p-qty').value) || 1;
-  const nDesins  = parseInt(document.getElementById('p-ndesins')?.value) || 0;
   const traslado = parseFloat(document.getElementById('p-traslado')?.value) || 0;
-  const extras   = nDesins * COSTO_DESINS_UD + traslado;
+  const totalLineas = lineasForm.reduce((s, l) => s + subtotalLinea(tipo, l), 0);
+  const total = totalLineas + traslado;
 
-  if (tipo === 'Abanico' && selectedModeloPrecio > 0) {
-    document.getElementById('p-total').value = (qty * selectedModeloPrecio + extras).toFixed(2);
-  } else if (tipo === 'Persiana' && selectedTelaPrice > 0) {
-    const ancho = parseFloat(document.getElementById('p-ancho').value) || 0;
-    const alto  = parseFloat(document.getElementById('p-alto').value)  || 0;
-    const m2    = (ancho / 100) * (alto / 100);
-    document.getElementById('p-total').value = (qty * m2 * selectedTelaPrice + extras).toFixed(2);
-  }
+  // Actualizar subtotales visibles en cada card (sin re-renderizar para no perder foco)
+  lineasForm.forEach((l, i) => {
+    const card = document.querySelector(`.linea-card[data-idx="${i}"]`);
+    if (!card) return;
+    const sub = card.querySelector('.grn');
+    if (sub) sub.textContent = money(subtotalLinea(tipo, l));
+  });
+
+  const totalEl = document.getElementById('p-total');
+  if (totalEl) totalEl.value = total.toFixed(2);
 }
 
 // ── AUTOCOMPLETE HELPERS ─────────────────────────────────────────────────────
@@ -360,17 +520,19 @@ function getAggregated(categoria) {
 }
 
 // ── MODELO AUTOCOMPLETE (ABANICO) ────────────────────────────────────────────
-export function onModeloInput() {
-  const q    = document.getElementById('p-modelo').value.trim();
+export function onModeloInput(idx) {
+  const inp = document.getElementById('p-modelo-' + idx);
+  if (!inp) return;
+  const q    = inp.value.trim();
   const list = getAggregated('abanico').filter(m =>
     !q || m.modelo.toLowerCase().includes(q.toLowerCase())
   );
-  const ac = document.getElementById('ac-modelo');
-  modeloAcIdx = -1;
-  if (!list.length) { ac.classList.remove('open'); return; }
+  const ac = document.getElementById('ac-modelo-' + idx);
+  if (lineasForm[idx]) lineasForm[idx].acIdx = -1;
+  if (!list.length) { ac?.classList.remove('open'); return; }
   ac.innerHTML = list.map((m, i) =>
     `<div class="ac-item" data-idx="${i}"
-         onmousedown="selectModelo('${esc(m.modelo).replace(/'/g, "\\'")}',${m.precio},${m.cantidad})">
+         onmousedown="selectModelo(${idx},'${esc(m.modelo).replace(/'/g, "\\'")}',${m.precio},${m.cantidad})">
        <span class="ac-item-name">${highlight(m.modelo, q)}</span>
        <span class="ac-item-stock ${stockClass(m.cantidad)}">Disp: ${m.cantidad}</span>
        <span class="ac-item-meta">${money(m.precio)}/ud</span>
@@ -379,36 +541,42 @@ export function onModeloInput() {
   ac.classList.add('open');
 }
 
-export function onModeloKey(e) {
-  const ac    = document.getElementById('ac-modelo');
-  const items = ac.querySelectorAll('.ac-item');
+export function onModeloKey(e, idx) {
+  const ac    = document.getElementById('ac-modelo-' + idx);
+  const items = ac ? ac.querySelectorAll('.ac-item') : [];
   if (!items.length) return;
-  if      (e.key === 'ArrowDown')                      { e.preventDefault(); modeloAcIdx = Math.min(modeloAcIdx + 1, items.length - 1); }
-  else if (e.key === 'ArrowUp')                        { e.preventDefault(); modeloAcIdx = Math.max(modeloAcIdx - 1, 0); }
-  else if (e.key === 'Enter' && modeloAcIdx >= 0)      { e.preventDefault(); items[modeloAcIdx].dispatchEvent(new MouseEvent('mousedown')); return; }
-  else if (e.key === 'Escape')                         { ac.classList.remove('open'); return; }
-  items.forEach((el, i) => el.classList.toggle('focused', i === modeloAcIdx));
-  if (modeloAcIdx >= 0) items[modeloAcIdx].scrollIntoView({ block: 'nearest' });
+  const l = lineasForm[idx] || {};
+  if      (e.key === 'ArrowDown')                { e.preventDefault(); l.acIdx = Math.min((l.acIdx ?? -1) + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp')                  { e.preventDefault(); l.acIdx = Math.max((l.acIdx ?? 0) - 1, 0); }
+  else if (e.key === 'Enter' && l.acIdx >= 0)    { e.preventDefault(); items[l.acIdx].dispatchEvent(new MouseEvent('mousedown')); return; }
+  else if (e.key === 'Escape')                   { ac.classList.remove('open'); return; }
+  items.forEach((el, i) => el.classList.toggle('focused', i === l.acIdx));
+  if (l.acIdx >= 0) items[l.acIdx].scrollIntoView({ block: 'nearest' });
 }
 
-export function onModeloBlur() {
-  setTimeout(() => document.getElementById('ac-modelo')?.classList.remove('open'), 150);
+export function onModeloBlur(idx) {
+  setTimeout(() => document.getElementById('ac-modelo-' + idx)?.classList.remove('open'), 150);
 }
 
-export function selectModelo(nombre, precio, stock) {
-  document.getElementById('p-modelo').value = nombre;
-  document.getElementById('ac-modelo').classList.remove('open');
-  selectedModeloPrecio = precio;
-  modeloAcIdx = -1;
-  _updateModeloInfo(nombre, precio, stock);
+export function selectModelo(idx, nombre, precio, stock) {
+  const inp = document.getElementById('p-modelo-' + idx);
+  if (inp) inp.value = nombre;
+  document.getElementById('ac-modelo-' + idx)?.classList.remove('open');
+  if (lineasForm[idx]) {
+    lineasForm[idx].modelo     = nombre;
+    lineasForm[idx].precioUnit = precio;
+    lineasForm[idx].stock      = stock;
+    lineasForm[idx].acIdx      = -1;
+  }
+  _updateModeloInfo(idx, nombre, precio, stock);
   calcPedidoTotal();
 }
 
-function _updateModeloInfo(nombre, precio, stock) {
-  const el = document.getElementById('modelo-info');
+function _updateModeloInfo(idx, nombre, precio, stock) {
+  const el = document.getElementById('modelo-info-' + idx);
   if (!el) return;
   if (precio > 0) {
-    const qty = typeof stock !== 'undefined' ? stock : (() => {
+    const qty = typeof stock !== 'undefined' && stock !== null ? stock : (() => {
       const agg = getAggregated('abanico').find(m => m.modelo === nombre);
       return agg ? agg.cantidad : null;
     })();
@@ -422,17 +590,19 @@ function _updateModeloInfo(nombre, precio, stock) {
 }
 
 // ── TELA AUTOCOMPLETE (PERSIANA) ─────────────────────────────────────────────
-export function onTelaInput() {
-  const q    = document.getElementById('p-tela').value.trim();
+export function onTelaInput(idx) {
+  const inp = document.getElementById('p-tela-' + idx);
+  if (!inp) return;
+  const q    = inp.value.trim();
   const list = getAggregated('persiana').filter(m =>
     !q || m.modelo.toLowerCase().includes(q.toLowerCase())
   );
-  const ac = document.getElementById('ac-tela');
-  telaAcIdx = -1;
-  if (!list.length) { ac.classList.remove('open'); return; }
+  const ac = document.getElementById('ac-tela-' + idx);
+  if (lineasForm[idx]) lineasForm[idx].acIdx = -1;
+  if (!list.length) { ac?.classList.remove('open'); return; }
   ac.innerHTML = list.map((m, i) =>
     `<div class="ac-item" data-idx="${i}"
-         onmousedown="selectTela('${esc(m.modelo).replace(/'/g, "\\'")}',${m.precio},${m.cantidad})">
+         onmousedown="selectTela(${idx},'${esc(m.modelo).replace(/'/g, "\\'")}',${m.precio},${m.cantidad})">
        <span class="ac-item-name">${highlight(m.modelo, q)}</span>
        <span class="ac-item-stock ${stockClass(m.cantidad)}">Disp: ${m.cantidad} m</span>
        <span class="ac-item-meta">${money(m.precio)}/m²</span>
@@ -441,32 +611,44 @@ export function onTelaInput() {
   ac.classList.add('open');
 }
 
-export function onTelaKey(e) {
-  const ac    = document.getElementById('ac-tela');
-  const items = ac.querySelectorAll('.ac-item');
+export function onTelaKey(e, idx) {
+  const ac    = document.getElementById('ac-tela-' + idx);
+  const items = ac ? ac.querySelectorAll('.ac-item') : [];
   if (!items.length) return;
-  if      (e.key === 'ArrowDown')                    { e.preventDefault(); telaAcIdx = Math.min(telaAcIdx + 1, items.length - 1); }
-  else if (e.key === 'ArrowUp')                      { e.preventDefault(); telaAcIdx = Math.max(telaAcIdx - 1, 0); }
-  else if (e.key === 'Enter' && telaAcIdx >= 0)      { e.preventDefault(); items[telaAcIdx].dispatchEvent(new MouseEvent('mousedown')); return; }
-  else if (e.key === 'Escape')                       { ac.classList.remove('open'); return; }
-  items.forEach((el, i) => el.classList.toggle('focused', i === telaAcIdx));
-  if (telaAcIdx >= 0) items[telaAcIdx].scrollIntoView({ block: 'nearest' });
+  const l = lineasForm[idx] || {};
+  if      (e.key === 'ArrowDown')                { e.preventDefault(); l.acIdx = Math.min((l.acIdx ?? -1) + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp')                  { e.preventDefault(); l.acIdx = Math.max((l.acIdx ?? 0) - 1, 0); }
+  else if (e.key === 'Enter' && l.acIdx >= 0)    { e.preventDefault(); items[l.acIdx].dispatchEvent(new MouseEvent('mousedown')); return; }
+  else if (e.key === 'Escape')                   { ac.classList.remove('open'); return; }
+  items.forEach((el, i) => el.classList.toggle('focused', i === l.acIdx));
+  if (l.acIdx >= 0) items[l.acIdx].scrollIntoView({ block: 'nearest' });
 }
 
-export function onTelaBlur() {
-  setTimeout(() => document.getElementById('ac-tela')?.classList.remove('open'), 150);
+export function onTelaBlur(idx) {
+  setTimeout(() => document.getElementById('ac-tela-' + idx)?.classList.remove('open'), 150);
 }
 
-export function selectTela(nombre, precio, stock) {
-  document.getElementById('p-tela').value = nombre;
-  document.getElementById('ac-tela').classList.remove('open');
-  selectedTelaPrice = precio;
-  telaAcIdx = -1;
-  const el = document.getElementById('tela-info');
-  if (el) el.innerHTML =
-    `<span style="font-size:11px;color:var(--mu)">${money(precio)}/m²</span>` +
-    `&nbsp;&nbsp;<span class="ac-item-stock ${stockClass(stock)}" style="border-radius:10px;padding:1px 8px">Disp: ${stock} m</span>`;
+export function selectTela(idx, nombre, precio, stock) {
+  const inp = document.getElementById('p-tela-' + idx);
+  if (inp) inp.value = nombre;
+  document.getElementById('ac-tela-' + idx)?.classList.remove('open');
+  if (lineasForm[idx]) {
+    lineasForm[idx].tipoTela   = nombre;
+    lineasForm[idx].precioUnit = precio;
+    lineasForm[idx].stock      = stock;
+    lineasForm[idx].acIdx      = -1;
+  }
+  _updateTelaInfo(idx, precio, stock);
   calcPedidoTotal();
+}
+
+function _updateTelaInfo(idx, precio, stock) {
+  const el = document.getElementById('tela-info-' + idx);
+  if (!el) return;
+  const stockHtml = stock !== null && stock !== undefined
+    ? `&nbsp;&nbsp;<span class="ac-item-stock ${stockClass(stock)}" style="border-radius:10px;padding:1px 8px">Disp: ${stock} m</span>`
+    : '';
+  el.innerHTML = `<span style="font-size:11px;color:var(--mu)">${money(precio)}/m²</span>${stockHtml}`;
 }
 
 // ── OPEN MODAL ───────────────────────────────────────────────────────────────
@@ -482,7 +664,7 @@ function _populateMuniSelect() {
   sel.dataset.populated = '1';
 }
 
-export function openPedidoModal(id = null) {
+export async function openPedidoModal(id = null) {
   document.getElementById('fp').reset();
   document.getElementById('p-eid').value = '';
   _populateMuniSelect();
@@ -497,9 +679,7 @@ export function openPedidoModal(id = null) {
   if (_ncMap) { _ncMap.remove(); _ncMap = null; _ncMarker = null; }
   document.getElementById('mp-t').textContent = id ? 'Editar Pedido' : 'Nuevo Pedido';
   document.getElementById('p-fecha').value = todayStr();
-  selectedModeloPrecio = 0; selectedTelaPrice = 0;
-  const mi = document.getElementById('modelo-info'); if (mi) mi.innerHTML = '';
-  const ti = document.getElementById('tela-info');   if (ti) ti.innerHTML = '';
+  lineasForm = [];
   setCliMode('ex');
   refreshClientesDropdown();
   // Populate technicians from DB (with fallback to constants)
@@ -517,47 +697,38 @@ export function openPedidoModal(id = null) {
   const trasladoEl = document.getElementById('p-traslado');
   if (trasladoEl) trasladoEl.value = COSTO_TRASLADO_DEFAULT;
 
-  if (!id) { document.getElementById('p-tipo').value = 'Abanico'; updatePF(); }
+  if (!id) {
+    document.getElementById('p-tipo').value = 'Abanico';
+    lineasForm = [blankLinea()];
+    updatePF();
+  }
   if (id !== null) {
     const p = state.pedidos.find(x => x.id === id); if (!p) return;
     document.getElementById('p-eid').value   = id;
     document.getElementById('p-ce').value    = p.clienteId || '';
     document.getElementById('p-tipo').value  = p.tipoServicio;
     document.getElementById('p-fecha').value = p.fecha || todayStr();
-    document.getElementById('p-qty').value   = p.cantidad;
-    document.getElementById('p-total').value = p.total;
     if (trasladoEl) trasladoEl.value = p.detalles?.traslado ?? COSTO_TRASLADO_DEFAULT;
-    updatePF();
-    const d = p.detalles || {};
-    if (p.tipoServicio === 'Abanico') {
-      document.getElementById('p-modelo').value  = d.modelo || '';
-      document.getElementById('p-ndesins').value = d.nDesins || 0;
-      calcExtra();
-      if (d.modelo) {
-        const agg = getAggregated('abanico').find(m => m.modelo === d.modelo);
-        if (agg) { selectedModeloPrecio = agg.precio; _updateModeloInfo(d.modelo, agg.precio, agg.cantidad); }
-      }
+
+    // Cargar líneas: prefer pedido_detalle (nuevo), fallback al JSONB legacy
+    let dets = [];
+    try {
+      const rows = await api.pedidos.detalle(id);
+      dets = (rows || []).map(pdFromDb);
+    } catch (_) { /* sigue con legacy */ }
+
+    if (dets.length) {
+      lineasForm = dets.map(d => _lineaFromDetalle(d, p.tipoServicio));
+    } else {
+      lineasForm = [_lineaFromLegacy(p)];
     }
-    if (p.tipoServicio === 'Persiana') {
-      document.getElementById('p-ancho').value = d.ancho || '';
-      document.getElementById('p-alto').value  = d.alto  || '';
-      document.getElementById('p-inst').value  = d.instalacion || 'interior';
-      document.getElementById('p-tela').value  = d.tipoTela || '';
-      if (d.tipoTela) {
-        const agg = getAggregated('persiana').find(m => m.modelo === d.tipoTela);
-        if (agg) {
-          selectedTelaPrice = agg.precio;
-          const el = document.getElementById('tela-info');
-          if (el) el.innerHTML =
-            `<span style="font-size:11px;color:var(--mu)">${money(agg.precio)}/m²</span>` +
-            `&nbsp;&nbsp;<span class="ac-item-stock ${stockClass(agg.cantidad)}" style="border-radius:10px;padding:1px 8px">Disp: ${agg.cantidad} m</span>`;
-        }
-      }
-    }
-    if (['Levantamiento', 'Limpieza', 'Mantenimiento'].includes(p.tipoServicio)) {
-      if (p.tipoServicio === 'Limpieza') document.getElementById('p-modelo').value = d.modelo || '';
-      document.getElementById('p-notas').value = d.notas || '';
-    }
+
+    // Mostrar sección de líneas sin pasar por updatePF (que resetea lineasForm).
+    document.getElementById('r-lineas-hd').style.display = '';
+    document.getElementById('r-lineas').style.display    = '';
+    renderLineas();
+    calcPedidoTotal();
+
     const cli = p.clienteId ? state.clientes.find(c => c.id === +p.clienteId) : null;
     if (cli) document.getElementById('p-pago').value = cli.metodoPago;
     const sm = state.servicios_metricas.find(s => s.pedido_id === id);
@@ -568,6 +739,88 @@ export function openPedidoModal(id = null) {
     }
   }
   openOv('ov-ped');
+}
+
+function _lineaFromDetalle(d, tipo) {
+  const l = blankLinea();
+  l.cantidad   = d.cantidad || 1;
+  l.precioUnit = d.precioUnitario || 0;
+  if (tipo === 'Abanico') {
+    l.modelo  = d.modeloAbanico || d.descripcion || '';
+    l.nDesins = d.desinstalarCantidad || 0;
+    const agg = getAggregated('abanico').find(m => m.modelo === l.modelo);
+    if (agg) l.stock = agg.cantidad;
+  } else if (tipo === 'Persiana') {
+    l.tipoTela    = d.telaColor || '';
+    l.ancho       = d.anchoM ? d.anchoM * 100 : '';
+    l.alto        = d.altoM  ? d.altoM  * 100 : '';
+    l.instalacion = d.sistemaInstalacion || 'interior';
+    const agg = getAggregated('persiana').find(m => m.modelo === l.tipoTela);
+    if (agg) l.stock = agg.cantidad;
+  } else {
+    l.modelo = d.descripcion || '';
+    l.notas  = d.notas || '';
+  }
+  return l;
+}
+
+function _lineaToDetalle(tipo, l) {
+  const base = {
+    tipoLinea: 'item',
+    cantidad: l.cantidad || 1,
+    precioUnitario: l.precioUnit || 0,
+    requiereServicio: true,
+  };
+  if (tipo === 'Abanico') {
+    return {
+      ...base,
+      descripcion: l.modelo || 'Abanico',
+      unidadMedida: 'pieza',
+      modeloAbanico: l.modelo || null,
+      desinstalarCantidad: l.nDesins || null,
+    };
+  }
+  if (tipo === 'Persiana') {
+    return {
+      ...base,
+      descripcion: l.tipoTela || 'Persiana',
+      unidadMedida: 'm2',
+      telaColor: l.tipoTela || null,
+      anchoM: l.ancho ? l.ancho / 100 : null,
+      altoM:  l.alto  ? l.alto  / 100 : null,
+      sistemaInstalacion: l.instalacion || null,
+    };
+  }
+  return {
+    ...base,
+    descripcion: l.modelo || tipo || 'Servicio',
+    unidadMedida: 'pieza',
+    notas: l.notas || null,
+  };
+}
+
+function _lineaFromLegacy(p) {
+  const d = p.detalles || {};
+  const l = blankLinea();
+  l.cantidad   = p.cantidad || 1;
+  l.precioUnit = l.cantidad > 0 ? (p.total || 0) / l.cantidad : 0;
+  if (p.tipoServicio === 'Abanico') {
+    l.modelo  = d.modelo  || '';
+    l.nDesins = d.nDesins || 0;
+    const agg = getAggregated('abanico').find(m => m.modelo === l.modelo);
+    if (agg) { l.precioUnit = agg.precio; l.stock = agg.cantidad; }
+  } else if (p.tipoServicio === 'Persiana') {
+    l.ancho       = d.ancho || '';
+    l.alto        = d.alto  || '';
+    l.instalacion = d.instalacion || 'interior';
+    l.tipoTela    = d.tipoTela || '';
+    const agg = getAggregated('persiana').find(m => m.modelo === l.tipoTela);
+    if (agg) { l.precioUnit = agg.precio; l.stock = agg.cantidad; }
+  } else {
+    l.modelo = d.modelo || '';
+    l.notas  = d.notas  || '';
+  }
+  return l;
 }
 
 // ── SUBMIT ───────────────────────────────────────────────────────────────────
@@ -650,12 +903,24 @@ export async function submitPedido(e) {
         }
       }
     }
+    syncDomToLineas();
+    if (!lineasForm.length) throw new Error('Agrega al menos un ítem');
+
     const traslado = parseFloat(document.getElementById('p-traslado')?.value) || 0;
-    let detalles = {};
-    if (tipo === 'Abanico')       detalles = { modelo: document.getElementById('p-modelo').value.trim(), nDesins: parseInt(document.getElementById('p-ndesins').value) || 0, traslado };
-    else if (tipo === 'Persiana') detalles = { ancho: +document.getElementById('p-ancho').value, alto: +document.getElementById('p-alto').value, instalacion: document.getElementById('p-inst').value, tipoTela: document.getElementById('p-tela').value.trim(), traslado };
-    else if (tipo === 'Limpieza') detalles = { modelo: document.getElementById('p-modelo').value.trim(), notas: document.getElementById('p-notas').value.trim(), traslado };
-    else                          detalles = { notas: document.getElementById('p-notas').value.trim(), traslado };
+    const totalLineas = lineasForm.reduce((s, l) => s + subtotalLinea(tipo, l), 0);
+    const total = totalLineas + traslado;
+    const qty = lineasForm.reduce((s, l) => s + (l.cantidad || 1), 0);
+
+    // Detalles legacy JSONB — persistimos la primera línea para compatibilidad con
+    // pedidoDetalle(p) si por alguna razón las líneas no están cargadas aún, y traslado.
+    const primera = lineasForm[0];
+    let detalles = { traslado };
+    if (tipo === 'Abanico')       Object.assign(detalles, { modelo: primera.modelo, nDesins: primera.nDesins });
+    else if (tipo === 'Persiana') Object.assign(detalles, { ancho: primera.ancho, alto: primera.alto, instalacion: primera.instalacion, tipoTela: primera.tipoTela });
+    else if (tipo === 'Limpieza') Object.assign(detalles, { modelo: primera.modelo, notas: primera.notas });
+    else                          Object.assign(detalles, { notas: primera.notas });
+
+    const lineasPayload = lineasForm.map(l => pdToDb(_lineaToDetalle(tipo, l)));
 
     btn.innerHTML = '<span class="sp"></span> Guardando…';
     const cli = clienteId ? state.clientes.find(c => c.id === clienteId) : null;
@@ -664,8 +929,12 @@ export async function submitPedido(e) {
       const p = state.pedidos.find(x => x.id === +eid);
       if (p) {
         await api.pedidos.update(+eid, pToDb({ ...p, clienteId, tipoServicio: tipo, fecha, cantidad: qty, total, detalles }));
+        await api.pedidos.replaceDetalle(+eid, lineasPayload);
         const i = state.pedidos.findIndex(x => x.id === +eid);
         if (i !== -1) state.pedidos[i] = { ...state.pedidos[i], clienteId, tipoServicio: tipo, fecha, cantidad: qty, total, detalles };
+        // refrescar pedido_detalle local
+        state.pedidoDetalle = (state.pedidoDetalle || []).filter(d => d.pedidoId !== +eid)
+          .concat(lineasForm.map(l => ({ ..._lineaToDetalle(tipo, l), pedidoId: +eid })));
         toast('Pedido actualizado');
       }
       const existingSM = state.servicios_metricas.find(s => s.pedido_id === +eid);
@@ -681,6 +950,9 @@ export async function submitPedido(e) {
       const row = await api.pedidos.create(pToDb({ clienteId, tipoServicio: tipo, fecha, cantidad: qty, total, detalles }));
       const np = pFromDb(row);
       state.pedidos.push(np);
+      await api.pedidos.replaceDetalle(np.id, lineasPayload);
+      state.pedidoDetalle = (state.pedidoDetalle || [])
+        .concat(lineasForm.map(l => ({ ..._lineaToDetalle(tipo, l), pedidoId: np.id })));
       if (clienteId) {
         const ci = state.clientes.findIndex(c => c.id === clienteId);
         if (ci !== -1 && !state.clientes[ci].numPedido) {
@@ -748,13 +1020,21 @@ export function renderPedidos() {
     const c       = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
     const sm      = state.servicios_metricas.find(s => s.pedido_id === p.id);
     const cancelled = isCancelled(p);
-    return `<tr${cancelled ? ' style="opacity:0.5"' : ''}>
+    const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+    const cantTotal = lineas.length ? lineas.reduce((s, l) => s + (l.cantidad || 0), 0) : p.cantidad;
+    const hasExpand = lineas.length > 1;
+    const expandBtn = hasExpand
+      ? `<button class="btn bw bsm expand-btn" onclick="togglePedidoExpand(${p.id})" title="Ver ítems" style="padding:2px 6px;margin-right:4px">
+           <i data-lucide="chevron-right" style="width:12px;height:12px" id="exp-ico-${p.id}"></i>
+         </button>`
+      : '';
+    const row = `<tr${cancelled ? ' style="opacity:0.5"' : ''} data-pedido-id="${p.id}">
       <td data-label="ID" class="mob-det"><span class="pill pi">#${p.id}</span></td>
       <td data-label="Fecha" class="nw mob-det">${fdateShort(p.fecha)}</td>
       <td data-label="Cliente">${c ? `<span class="bold">${esc(c.nombre)}</span>` : '<span class="mu">Sin cliente</span>'}</td>
       <td data-label="Servicio">${tipoPill(p.tipoServicio)}</td>
-      <td data-label="Detalle" class="mob-det">${pedidoDetalle(p)}</td>
-      <td data-label="Cant." class="tr mob-det">${p.cantidad}</td>
+      <td data-label="Detalle" class="mob-det">${expandBtn}${pedidoDetalle(p)}</td>
+      <td data-label="Cant." class="tr mob-det">${cantTotal}</td>
       <td data-label="Total" class="bold grn nw">${money(p.total)}</td>
       <td data-label="Estado">${cancelled ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-weight:600">Cancelado</span>' : sm ? statusPill(sm.estado) : '<span class="mu" style="font-size:11px">Sin tracking</span>'}</td>
       <td class="td-act nw">
@@ -769,6 +1049,29 @@ export function renderPedidos() {
           <i data-lucide="trash-2" style="width:12px;height:12px"></i>
         </button>` : '—'}
       </td></tr>`;
+    const expandRow = hasExpand
+      ? `<tr class="pedido-expand" id="exp-${p.id}" style="display:none;background:var(--bg)">
+          <td colspan="9" style="padding:8px 16px">
+            <table style="width:100%;font-size:12.5px">
+              <thead><tr style="color:var(--mu);font-weight:600">
+                <th style="text-align:left;padding:4px 6px">Ítem</th>
+                <th style="text-align:right;padding:4px 6px">Cant.</th>
+                <th style="text-align:right;padding:4px 6px">Precio unit.</th>
+                <th style="text-align:right;padding:4px 6px">Subtotal</th>
+              </tr></thead>
+              <tbody>
+                ${lineas.map(l => `<tr>
+                  <td style="padding:4px 6px">${esc(l.modeloAbanico || l.telaColor || l.descripcion || '—')}</td>
+                  <td style="text-align:right;padding:4px 6px">${l.cantidad}</td>
+                  <td style="text-align:right;padding:4px 6px">${money(l.precioUnitario)}</td>
+                  <td style="text-align:right;padding:4px 6px" class="bold">${money(l.subtotal || (l.cantidad * l.precioUnitario))}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </td>
+         </tr>`
+      : '';
+    return row + expandRow;
   }).join('');
 
   const activeCount = state.pedidos.filter(p => !isCancelled(p)).length;
@@ -777,13 +1080,38 @@ export function renderPedidos() {
   initMobileRows(tbody);
 }
 
+export function togglePedidoExpand(id) {
+  const row = document.getElementById('exp-' + id);
+  const ico = document.getElementById('exp-ico-' + id);
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : '';
+  if (ico) {
+    ico.setAttribute('data-lucide', open ? 'chevron-right' : 'chevron-down');
+    refreshIcons(ico.parentElement);
+  }
+}
+
 export function exportPedidos() {
   if (!state.pedidos.length) return toast('No hay pedidos para exportar', 'er');
-  const headers = ['ID', 'Fecha', 'Cliente', 'Servicio', 'Monto', 'Cantidad', 'Estado'];
-  const rows = state.pedidos.map(p => {
+  const headers = ['ID', 'Fecha', 'Cliente', 'Servicio', 'Modelo', 'Cantidad', 'PrecioUnit', 'Subtotal', 'TotalPedido', 'Estado'];
+  const rows = [];
+  state.pedidos.forEach(p => {
     const c  = p.clienteId ? state.clientes.find(x => x.id === +p.clienteId) : null;
     const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
-    return [p.id, p.fecha, `"${(c?.nombre || 'Sin cliente').replace(/"/g, '""')}"`, p.tipoServicio, p.total, p.cantidad, sm ? sm.estado : 'N/A'];
+    const cliente = `"${(c?.nombre || 'Sin cliente').replace(/"/g, '""')}"`;
+    const estado = sm ? sm.estado : 'N/A';
+    const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+    if (lineas.length) {
+      lineas.forEach(l => {
+        const modelo = `"${(l.modeloAbanico || l.telaColor || l.descripcion || '').replace(/"/g, '""')}"`;
+        rows.push([p.id, p.fecha, cliente, p.tipoServicio, modelo, l.cantidad, l.precioUnitario, l.subtotal || (l.cantidad * l.precioUnitario), p.total, estado]);
+      });
+    } else {
+      const modelo = `"${(p.detalles?.modelo || p.detalles?.tipoTela || '').replace(/"/g, '""')}"`;
+      const unit = p.cantidad > 0 ? p.total / p.cantidad : 0;
+      rows.push([p.id, p.fecha, cliente, p.tipoServicio, modelo, p.cantidad, unit, p.total, p.total, estado]);
+    }
   });
   downloadCSV([headers.join(','), ...rows.map(r => r.join(','))].join('\n'), `pedidos_moonlighting_${todayStr()}.csv`);
   toast('Listado de pedidos exportado');

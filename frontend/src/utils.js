@@ -1,4 +1,5 @@
 import { PAGO_CLS, PAGO_IC, TIPO_BG, TIPO_CO, TIPO_IC, STATUS_COLORS, STATUS_BG, STATUS_LABELS, MUNIS } from './constants.js';
+import { state } from './state.js';
 
 export function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 export function money(n) { return '$' + parseFloat(n || 0).toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -33,7 +34,32 @@ export function statusPill(estado) {
   const n = icons[estado] || 'circle';
   return `<span class="pill" style="background:${bg};color:${col}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${label}</span>`;
 }
+function _summaryLinea(tipo, l) {
+  if (tipo === 'Abanico') {
+    const q = l.cantidad || 1;
+    const modelo = esc(l.modeloAbanico || l.descripcion || '');
+    const des = l.desinstalarCantidad > 0 ? ` ↓${l.desinstalarCantidad}` : '';
+    return `<span class="bold">${q}× ${modelo}</span>${des}`;
+  }
+  if (tipo === 'Persiana') {
+    const q = l.cantidad || 1;
+    const tela = esc(l.telaColor || l.descripcion || '');
+    const ancho = l.anchoM ? Math.round(l.anchoM * 100) : '';
+    const alto  = l.altoM  ? Math.round(l.altoM  * 100) : '';
+    const dim = (ancho && alto) ? ` <span class="mu">${ancho}×${alto}cm</span>` : '';
+    return `<span class="bold">${q}× ${tela}</span>${dim}`;
+  }
+  const desc = esc(l.descripcion || '');
+  const q = l.cantidad || 1;
+  return q > 1 ? `<span class="bold">${q}× ${desc}</span>` : `<span class="bold">${desc}</span>`;
+}
+
 export function pedidoDetalle(p) {
+  const lineas = (state.pedidoDetalle || []).filter(d => d.pedidoId === p.id);
+  if (lineas.length) {
+    return lineas.map(l => _summaryLinea(p.tipoServicio, l)).join(' · ');
+  }
+  // Fallback al JSONB legacy (antes del backfill o mientras pedidoDetalle no cargue)
   const d = p.detalles || {};
   if (p.tipoServicio === 'Abanico') { let h = `<span class="bold">${esc(d.modelo || '')}</span>`; if (d.nDesins > 0) h += ` <span class="pill" style="background:#fef3c7;color:#92400e;font-size:10px"><i data-lucide="arrow-down" style="width:10px;height:10px;vertical-align:middle"></i> ×${d.nDesins}</span>`; return h; }
   if (p.tipoServicio === 'Persiana') return `<span class="bold">${esc(d.tipoTela || '')}</span> <span class="mu">${d.ancho}×${d.alto}cm · ${d.instalacion}</span>`;

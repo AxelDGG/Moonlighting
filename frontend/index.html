@@ -517,49 +517,18 @@
           </div>
           <div class="fi"><label>Fecha *</label><input id="p-fecha" type="date" required/></div>
 
-          <!-- ABANICO -->
-          <div class="fi full fdiv" id="r-ab-hd" style="display:none">Detalles Abanico</div>
-          <div class="fi full" id="r-modelo" style="display:none">
-            <label>Modelo *</label>
-            <div class="ac-wrap">
-              <input id="p-modelo" type="text" autocomplete="off" placeholder="Escribe para buscar modelo…"
-                     oninput="onModeloInput()" onkeydown="onModeloKey(event)" onblur="onModeloBlur()"/>
-              <div class="ac-list" id="ac-modelo"></div>
-            </div>
-            <div id="modelo-info" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
+          <!-- LÍNEAS DEL PEDIDO (dinámicas según tipo) -->
+          <div class="fi full fdiv" id="r-lineas-hd" style="display:none">Ítems del pedido</div>
+          <div class="fi full" id="r-lineas" style="display:none">
+            <div id="p-lineas"></div>
+            <button type="button" class="btn bw bsm" onclick="addLinea()" style="margin-top:4px">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Agregar otro modelo
+            </button>
           </div>
-          <div class="fi" id="r-ndesins" style="display:none">
-            <label>Desinstalar</label>
-            <input id="p-ndesins" type="number" min="0" value="0" oninput="calcExtra()"/>
-            <span id="desins-hint" style="font-size:11px;color:var(--wa)"></span>
-          </div>
-
-          <!-- PERSIANA -->
-          <div class="fi full fdiv" id="r-pe-hd" style="display:none">Detalles Persiana</div>
-          <div class="fi" id="r-ancho" style="display:none"><label>Ancho (cm)</label><input id="p-ancho" type="number" oninput="calcPedidoTotal()"/></div>
-          <div class="fi" id="r-alto"  style="display:none"><label>Alto (cm)</label><input id="p-alto"  type="number" oninput="calcPedidoTotal()"/></div>
-          <div class="fi" id="r-inst"  style="display:none">
-            <label>Instalación</label>
-            <select id="p-inst"><option value="interior">Interior</option><option value="exterior">Exterior</option></select>
-          </div>
-          <div class="fi full" id="r-tela" style="display:none">
-            <label>Tela</label>
-            <div class="ac-wrap">
-              <input id="p-tela" type="text" autocomplete="off" placeholder="Escribe para buscar tela…"
-                     oninput="onTelaInput()" onkeydown="onTelaKey(event)" onblur="onTelaBlur()"/>
-              <div class="ac-list" id="ac-tela"></div>
-            </div>
-            <div id="tela-info" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
-          </div>
-
-          <!-- NOTAS -->
-          <div class="fi full fdiv" id="r-nt-hd" style="display:none">Notas adicionales</div>
-          <div class="fi full" id="r-notas" style="display:none"><label>Notas</label><textarea id="p-notas" rows="2"></textarea></div>
 
           <!-- COMUNES -->
-          <div class="fi"><label>Cant. *</label><input id="p-qty" type="number" min="1" value="1" required oninput="calcPedidoTotal()"/></div>
           <div class="fi"><label>Traslado ($)</label><input id="p-traslado" type="number" min="0" step="1" value="0" oninput="calcPedidoTotal()" title="Costo fijo de traslado — se suma al total automáticamente"/></div>
-          <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required/></div>
+          <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required readonly style="background:#f8fafc" title="Calculado automáticamente"/></div>
           <div class="fi full"><label>Pago</label>
             <select id="p-pago">
               <option value="Efectivo">Efectivo</option>

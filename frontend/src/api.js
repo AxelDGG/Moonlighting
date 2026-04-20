@@ -44,10 +44,12 @@ export const api = {
     create:        (data)     => post('/pedidos', data),
     update:        (id, data) => put(`/pedidos/${id}`, data),
     delete:        (id)       => del(`/pedidos/${id}`),
-    detalle:       (id)       => get(`/pedidos/${id}/detalle`),
-    addDetalle:    (id, det)  => post(`/pedidos/${id}/detalle`, det),
-    updateDetalle: (id, det)  => put(`/pedidos/detalle/${id}`, det),
-    deleteDetalle: (id)       => del(`/pedidos/detalle/${id}`),
+    allDetalle:     ()           => get(`/pedidos/detalle/all`),
+    detalle:        (id)         => get(`/pedidos/${id}/detalle`),
+    addDetalle:     (id, det)    => post(`/pedidos/${id}/detalle`, det),
+    replaceDetalle: (id, lineas) => post(`/pedidos/${id}/detalle/bulk`, { lineas }),
+    updateDetalle:  (id, det)    => put(`/pedidos/detalle/${id}`, det),
+    deleteDetalle:  (id)         => del(`/pedidos/detalle/${id}`),
   },
 
   // ========== SERVICIOS ==========
