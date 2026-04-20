@@ -1,3 +1,7 @@
+import { ROLES } from '../constants/roles.js';
+import { PEDIDO_LINE_TYPES } from '../constants/units.js';
+import { SERVICE_STATES } from '../constants/service-states.js';
+
 const pedidoBodySchema = {
   type: 'object',
   properties: {
@@ -27,7 +31,7 @@ const detalleBodySchema = {
   type: 'object',
   properties: {
     item_catalogo_id:     { type: ['integer', 'null'] },
-    tipo_linea:           { type: 'string', enum: ['item', 'ajuste', 'descuento', 'cargo'] },
+    tipo_linea:           { type: 'string', enum: [...PEDIDO_LINE_TYPES] },
     descripcion:          { type: 'string' },
     cantidad:             { type: 'number', minimum: 0 },
     unidad_medida:        { type: 'string' },
@@ -50,7 +54,7 @@ const detalleBodySchema = {
 
 export default async function pedidosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET / - Listar pedidos
   fastify.get('/', async (req, reply) => {
@@ -124,7 +128,7 @@ export default async function pedidosRoutes(fastify) {
     schema: { params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] } },
   }, async (req, reply) => {
     const { data: estadoCancelado } = await fastify.supabase
-      .from('estados_pedido').select('id').eq('nombre', 'cancelado').single();
+      .from('estados_pedido').select('id').eq('nombre', SERVICE_STATES.CANCELADO).single();
     if (!estadoCancelado) return reply.code(500).send({ error: 'No se encontró estado cancelado' });
     const { error } = await fastify.supabase
       .from('pedidos').update({ estado_id: estadoCancelado.id }).eq('id', req.params.id);

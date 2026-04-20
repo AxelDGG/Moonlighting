@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { esc, muniColor, pillPago, todayStr, downloadCSV } from '../utils.js';
 import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
 import { renderDash } from './dashboard.js';
-import { PAGO_IC } from '../constants.js';
+import { PAGO_IC, DEBOUNCE } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { updateMapMarkers } from './mapa.js';
 import { refreshClientesDropdown } from './pedidos.js';
@@ -106,7 +106,7 @@ export async function savePago(id, val) {
   const ci = state.clientes.findIndex(x => x.id === id); if (ci === -1) return;
   const updated = { ...state.clientes[ci], metodoPago: val };
   try { await api.clientes.update(id, cToDb(updated)); state.clientes[ci] = updated; toast('Método de pago actualizado'); } catch (err) { toast('Error: ' + err.message, 'er'); }
-  setTimeout(renderClientes, 150);
+  setTimeout(renderClientes, DEBOUNCE.RENDER);
 }
 
 export async function restoreCliente(id) {

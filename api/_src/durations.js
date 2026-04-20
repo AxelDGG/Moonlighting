@@ -1,49 +1,35 @@
-// Estimación de duración en backend (mirror de frontend/src/durations.js).
-// Se mantiene en sync manualmente — los valores son promedios del negocio.
+// Estimación de duración basada en la config de BD (service_duration_subtipos).
+// La config se provee por el llamador; este módulo solo implementa la lógica
+// pura para facilitar testing y evitar acoplar a fastify.supabase.
 
-const DURACION_CONFIG = {
-  Abanico: {
-    perUnit: true,
-    bySubtipo: { 'plafón': 25, 'retráctil': 25, 'candil': 57 },
-    default: 25,
-    desinstalacionPerUd: 10,
-  },
-  Persiana:      { perUnit: true,  default: 37 },
-  Levantamiento: { perUnit: false, default: 20 },
-  Mantenimiento: {
-    perUnit: true,
-    bySubtipo: { 'plafón': 40, 'candil': 75, 'persiana': 35, 'arreglos': 30 },
-    default: 40,
-  },
-  Limpieza: { perUnit: true, default: 30 },
-};
+const FALLBACK_DURATION_MIN = 30;
 
-function estimateLineaDurationMin(tipoServicio, linea) {
-  const cfg = DURACION_CONFIG[tipoServicio];
-  if (!cfg) return 30;
+export function estimateLineaDurationMin(tipoServicio, linea, durationsByTipo) {
+  const cfg = durationsByTipo && durationsByTipo[tipoServicio];
+  if (!cfg) return FALLBACK_DURATION_MIN;
   const subtipo = linea?.sistema_instalacion || linea?.subtipo || null;
   let base = cfg.default;
   if (cfg.bySubtipo && subtipo && cfg.bySubtipo[subtipo] != null) {
     base = cfg.bySubtipo[subtipo];
   }
+  if (base == null) base = FALLBACK_DURATION_MIN;
   const cant = cfg.perUnit ? Math.max(1, parseFloat(linea?.cantidad) || 1) : 1;
   let total = base * cant;
-  if (tipoServicio === 'Abanico' && linea?.desinstalar_cantidad) {
-    total += (cfg.desinstalacionPerUd || 0) * linea.desinstalar_cantidad;
+  if (tipoServicio === 'Abanico' && linea?.desinstalar_cantidad && cfg.desinstalacionPerUd) {
+    total += cfg.desinstalacionPerUd * linea.desinstalar_cantidad;
   }
   return Math.round(total);
 }
 
-export function estimatePedidoDurationMin(tipoServicio, lineas, fallbackCantidad) {
-  const cfg = DURACION_CONFIG[tipoServicio];
-  if (!cfg) return 60;
-  if (cfg.perUnit === false) return cfg.default;
+export function estimatePedidoDurationMin(tipoServicio, lineas, fallbackCantidad, durationsByTipo) {
+  const cfg = durationsByTipo && durationsByTipo[tipoServicio];
+  if (!cfg) return FALLBACK_DURATION_MIN;
+  if (cfg.perUnit === false) return cfg.default ?? FALLBACK_DURATION_MIN;
   if (Array.isArray(lineas) && lineas.length) {
-    return lineas.reduce((s, l) => s + estimateLineaDurationMin(tipoServicio, l), 0);
+    return lineas.reduce((s, l) => s + estimateLineaDurationMin(tipoServicio, l, durationsByTipo), 0);
   }
-  // Sin lineas disponibles → usar cantidad del pedido como estimación aproximada
   const cant = Math.max(1, parseFloat(fallbackCantidad) || 1);
-  return Math.round(cfg.default * cant);
+  return Math.round((cfg.default ?? FALLBACK_DURATION_MIN) * cant);
 }
 
 export function addMinutesHHMM(hhmm, min) {

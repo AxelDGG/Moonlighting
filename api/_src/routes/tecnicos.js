@@ -1,10 +1,15 @@
+import { ROLES } from '../constants/roles.js';
+import { COLLABORATOR_TYPES } from '../constants/units.js';
+import { MAX_LENGTHS } from '../constants/limits.js';
+import { ACTIVE_SERVICE_STATES } from '../constants/service-states.js';
+
 const tecnicoBodySchema = {
   type: 'object',
   properties: {
     nombre:                { type: 'string', minLength: 1 },
-    telefono:              { type: ['string', 'null'], maxLength: 20 },
+    telefono:              { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
     activo:                { type: 'boolean' },
-    tipo_colaborador:      { type: ['string', 'null'], enum: ['interno', 'externo', 'especialista', null] },
+    tipo_colaborador:      { type: ['string', 'null'], enum: [...COLLABORATOR_TYPES, null] },
     porcentaje_instalacion: { type: ['number', 'null'], minimum: 0, maximum: 100 },
     porcentaje_mantenimiento: { type: ['number', 'null'], minimum: 0, maximum: 100 },
     notas:                 { type: ['string', 'null'] },
@@ -15,6 +20,7 @@ const tecnicoBodySchema = {
 
 export default async function tecnicosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
+  const adminOnly = fastify.requireRole([ROLES.ADMIN]);
 
   // GET / - Listar técnicos activos
   fastify.get('/', async (req, reply) => {
@@ -53,7 +59,7 @@ export default async function tecnicosRoutes(fastify) {
 
   // POST / - Crear técnico
   fastify.post('/', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: adminOnly,
     schema: {
       body: {
         ...tecnicoBodySchema,
@@ -75,7 +81,7 @@ export default async function tecnicosRoutes(fastify) {
 
   // PUT /:id - Actualizar técnico
   fastify.put('/:id', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: adminOnly,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
       body: tecnicoBodySchema,
@@ -91,7 +97,7 @@ export default async function tecnicosRoutes(fastify) {
 
   // DELETE /:id - Desactivar técnico (no borrar)
   fastify.delete('/:id', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: adminOnly,
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },
@@ -121,7 +127,7 @@ export default async function tecnicosRoutes(fastify) {
       .from('servicios')
       .select('tecnico_id')
       .eq('fecha_servicio', req.params.fecha)
-      .in('estado', ['programado', 'en_ruta', 'en_proceso']);
+      .in('estado', [...ACTIVE_SERVICE_STATES]);
 
     const ocupadosIds = new Set(ocupados.map(s => s.tecnico_id).filter(Boolean));
     const disponibles = todosTecnicos.filter(t => !ocupadosIds.has(t.id));
@@ -143,7 +149,7 @@ export default async function tecnicosRoutes(fastify) {
         id
       `)
       .eq('fecha_servicio', req.params.fecha)
-      .in('estado', ['programado', 'en_ruta', 'en_proceso']);
+      .in('estado', [...ACTIVE_SERVICE_STATES]);
 
     if (error) return reply.code(500).send({ error: 'Error al cargar información' });
 

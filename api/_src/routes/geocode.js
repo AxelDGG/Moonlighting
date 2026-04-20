@@ -10,11 +10,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import crypto from 'node:crypto';
+import { NOMINATIM as NOMINATIM_CONFIG } from '../config/external-apis.js';
+import { CACHE_TTLS } from '../config/cache-ttls.js';
+import { RATE_LIMITS } from '../config/rate-limits.js';
+import { HTTP } from '../constants/http.js';
 
-const NOMINATIM      = 'https://nominatim.openstreetmap.org';
-const USER_AGENT     = 'Moonlighting/4.0 (contacto: moonlighting@local)';
-const ACCEPT_LANG    = 'es';
-const CACHE_TTL_DAYS = 90;
+const NOMINATIM      = NOMINATIM_CONFIG.BASE_URL;
+const USER_AGENT     = NOMINATIM_CONFIG.USER_AGENT;
+const ACCEPT_LANG    = NOMINATIM_CONFIG.ACCEPT_LANG;
+const CACHE_TTL_DAYS = CACHE_TTLS.GEOCODING_DAYS;
 
 function sha256(s) {
   return crypto.createHash('sha256').update(s).digest('hex');
@@ -54,7 +58,7 @@ function inferConfidence(item) {
   return 'low';
 }
 
-async function fetchJson(url, { timeoutMs = 8000 } = {}) {
+async function fetchJson(url, { timeoutMs = NOMINATIM_CONFIG.TIMEOUT_MS } = {}) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -128,7 +132,7 @@ async function nominatimReverse(lat, lng) {
     lat: String(lat),
     lon: String(lng),
     addressdetails: '1',
-    zoom: '18',
+    zoom: NOMINATIM_CONFIG.REVERSE_ZOOM,
   });
   return await fetchJson(`${NOMINATIM}/reverse?${params}`);
 }
@@ -138,7 +142,7 @@ export default async function geocodeRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
 
   // Rate-limit extra para no saturar Nominatim
-  const routeRL = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
+  const routeRL = { config: { rateLimit: RATE_LIMITS.GEOCODE } };
 
   // POST /search
   //   body: { q?: string, structured?: { street, city, postalcode, state } }
@@ -305,7 +309,7 @@ export default async function geocodeRoutes(fastify) {
       for (let i = 0; i < 5; i++) {
         const res = await fetch(current, { redirect: 'manual', headers: { 'User-Agent': USER_AGENT } });
         const loc = res.headers.get('location');
-        if (res.status >= 300 && res.status < 400 && loc) {
+        if (res.status >= HTTP.REDIRECT_MIN && res.status < HTTP.REDIRECT_MAX && loc) {
           current = loc;
           finalUrl = loc;
         } else {

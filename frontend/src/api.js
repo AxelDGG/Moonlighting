@@ -164,4 +164,10 @@ export const api = {
     reverse:      (lat, lng) => post('/geocode/reverse', { lat, lng }),
     resolveShort: (url)    => post('/geocode/resolve-short', { url }),
   },
+
+  // ========== CONFIG (runtime-config) ==========
+  config: {
+    runtime: ()              => get('/config/runtime'),
+    pricing: (clave, valor)  => post('/config/pricing', { clave, valor }),
+  },
 };

@@ -1,9 +1,12 @@
+import { ROLES } from '../constants/roles.js';
+import { MAX_LENGTHS } from '../constants/limits.js';
+
 const bodySchemaNew = {
   type: 'object',
   properties: {
-    nombre:       { type: 'string', minLength: 1, maxLength: 200 },
-    telefono:     { type: ['string', 'null'], maxLength: 20 },
-    telefono_alt: { type: ['string', 'null'], maxLength: 20 },
+    nombre:       { type: 'string', minLength: 1, maxLength: MAX_LENGTHS.NOMBRE },
+    telefono:     { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
+    telefono_alt: { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
     email:        { type: ['string', 'null'] },
     notas_cliente:{ type: ['string', 'null'] },
   },
@@ -19,11 +22,11 @@ const direccionSchema = {
     numero_ext:        { type: ['string', 'null'] },
     numero_int:        { type: ['string', 'null'] },
     colonia:           { type: ['string', 'null'] },
-    municipio:         { type: 'string', maxLength: 100 },
+    municipio:         { type: 'string', maxLength: MAX_LENGTHS.ZONA_NAME },
     estado_mx:         { type: ['string', 'null'] },
     codigo_postal:     { type: ['string', 'null'] },
     referencias:       { type: ['string', 'null'] },
-    google_maps_url:   { type: ['string', 'null'] },
+    google_maps_url:   { type: ['string', 'null'], maxLength: MAX_LENGTHS.GOOGLE_MAPS_URL },
     lat:               { type: ['number', 'null'] },
     lng:               { type: ['number', 'null'] },
     es_principal:      { type: 'boolean' },
@@ -33,7 +36,7 @@ const direccionSchema = {
 
 export default async function clientesRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET / - Listar clientes (activos por defecto; ?include_inactive=true para ver todos)
   fastify.get('/', async (req, reply) => {
@@ -71,10 +74,10 @@ export default async function clientesRoutes(fastify) {
         telefono:     body.telefono || body.numero || null,
         numero:       body.numero   || body.telefono || null,
         direccion:    body.direccion || null,
-        municipio:    body.municipio || 'Desconocido',
+        municipio:    body.municipio || null,
         lat:          body.lat  || null,
         lng:          body.lng  || null,
-        metodo_pago:  body.metodo_pago || 'Efectivo',
+        metodo_pago:  body.metodo_pago || null,
         num_pedido:   body.num_pedido  || null,
         google_maps_url: body.google_maps_url || null,
         codigo_postal:   body.codigo_postal   || null,

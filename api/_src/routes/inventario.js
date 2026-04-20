@@ -1,3 +1,7 @@
+import { ROLES } from '../constants/roles.js';
+import { INVENTORY_MOVEMENT_TYPES, LOCATION_TYPES } from '../constants/inventory.js';
+import { QUERY_LIMITS } from '../constants/limits.js';
+
 const existenciasSchema = {
   type: 'object',
   properties: {
@@ -15,7 +19,7 @@ const movimientoSchema = {
     item_catalogo_id:     { type: 'integer' },
     ubicacion_origen_id:  { type: ['integer', 'null'] },
     ubicacion_destino_id: { type: ['integer', 'null'] },
-    tipo_movimiento:      { type: 'string', enum: ['entrada', 'salida', 'transferencia', 'ajuste'] },
+    tipo_movimiento:      { type: 'string', enum: [...INVENTORY_MOVEMENT_TYPES] },
     cantidad:             { type: 'number', minimum: 0 },
     costo_unitario:       { type: 'number', minimum: 0 },
     pedido_id:            { type: ['integer', 'null'] },
@@ -28,7 +32,7 @@ const movimientoSchema = {
 
 export default async function inventarioRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET /existencias - Listar existencias consolidadas
   fastify.get('/existencias', async (req, reply) => {
@@ -95,7 +99,7 @@ export default async function inventarioRoutes(fastify) {
     );
     if (req.query.tipo) query = query.eq('tipo_movimiento', req.query.tipo);
 
-    const { data, error } = await query.limit(100);
+    const { data, error } = await query.limit(QUERY_LIMITS.MOVIMIENTOS);
     if (error) return reply.code(500).send({ error: 'Error al cargar movimientos' });
     return data;
   });
@@ -127,13 +131,13 @@ export default async function inventarioRoutes(fastify) {
 
   // POST /ubicaciones - Crear ubicación
   fastify.post('/ubicaciones', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: fastify.requireRole([ROLES.ADMIN]),
     schema: {
       body: {
         type: 'object',
         properties: {
           nombre:   { type: 'string', minLength: 1 },
-          tipo:     { type: 'string', enum: ['bodega', 'tecnico', 'transito'] },
+          tipo:     { type: 'string', enum: [...LOCATION_TYPES] },
           direccion: { type: ['string', 'null'] },
           notas:    { type: ['string', 'null'] },
         },

@@ -1,14 +1,18 @@
+import { ROLES } from '../constants/roles.js';
+import { MEASUREMENT_UNITS } from '../constants/units.js';
+import { MAX_LENGTHS, QUERY_LIMITS } from '../constants/limits.js';
+
 const itemBodySchema = {
   type: 'object',
   properties: {
-    sku:                  { type: ['string', 'null'], maxLength: 50 },
+    sku:                  { type: ['string', 'null'], maxLength: MAX_LENGTHS.SKU },
     nombre:               { type: 'string', minLength: 1 },
     categoria_id:         { type: 'integer' },
     tipo_persiana_id:     { type: ['integer', 'null'] },
     marca:                { type: ['string', 'null'] },
     modelo:               { type: ['string', 'null'] },
     color:                { type: ['string', 'null'] },
-    unidad_medida:        { type: 'string', enum: ['pieza', 'm2', 'm', 'servicio'] },
+    unidad_medida:        { type: 'string', enum: [...MEASUREMENT_UNITS] },
     precio_base:          { type: 'number', minimum: 0 },
     costo_base:           { type: 'number', minimum: 0 },
     controla_inventario:  { type: 'boolean' },
@@ -20,7 +24,7 @@ const itemBodySchema = {
 
 export default async function catalogoRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin']);
+  const mutate = fastify.requireRole([ROLES.ADMIN]);
 
   // GET / - Listar items del catálogo
   fastify.get('/', async (req, reply) => {
@@ -148,7 +152,7 @@ export default async function catalogoRoutes(fastify) {
       .select('*')
       .or(`nombre.ilike.${searchTerm},sku.ilike.${searchTerm},modelo.ilike.${searchTerm}`)
       .eq('activo', true)
-      .limit(20);
+      .limit(QUERY_LIMITS.SEARCH_RESULTS);
     if (error) return reply.code(500).send({ error: 'Error en búsqueda' });
     return data;
   });

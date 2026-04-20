@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
+import { CACHE_TTLS } from '../config/cache-ttls.js';
 
-const PROFILE_TTL_MS = 60_000;
+const PROFILE_TTL_MS = CACHE_TTLS.PROFILE_MS;
 const profileCache = new Map();
 
 function cacheGet(userId) {

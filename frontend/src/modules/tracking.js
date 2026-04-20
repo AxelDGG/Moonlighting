@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { esc, fdate, tipoPill, statusPill, calcRetrasoMin, calcDuracionMin, money } from '../utils.js';
 import { toast, openOv, closeOv } from '../ui.js';
 import { renderPedidos } from './pedidos.js';
-import { STATUS_COLORS } from '../constants.js';
+import { STATUS_COLORS, ROLES, SERVICE_STATES } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { estimatePedidoDurationMin, fmtDuracion, addMinutesHHMM } from '../durations.js';
 
@@ -49,7 +49,7 @@ export async function openTrackModal(pedidoId) {
   // Guardia frontend: técnicos solo pueden abrir seguimiento de pedidos
   // asignados a ellos. El backend vuelve a validar vía API.
   const profile = state.userProfile;
-  if (profile?.role === 'tecnico') {
+  if (profile?.role === ROLES.TECNICO) {
     const existing = state.servicios_metricas.find(s => s.pedido_id === pedidoId);
     const miNombre = state._tecnicoNombre;
     if (!miNombre || (existing && existing.tecnico && existing.tecnico !== miNombre)) {
@@ -61,7 +61,7 @@ export async function openTrackModal(pedidoId) {
   let sm = state.servicios_metricas.find(s => s.pedido_id === pedidoId);
   if (!sm) {
     try {
-      const row = await api.metricas.create({ pedido_id: pedidoId, tecnico: profile?.role === 'tecnico' ? (state._tecnicoNombre || '') : '', hora_programada: null, zona: c?.municipio || '', orden_ruta: null, estado: 'programado', dia_semana: getDiaSemana(p.fecha) });
+      const row = await api.metricas.create({ pedido_id: pedidoId, tecnico: profile?.role === ROLES.TECNICO ? (state._tecnicoNombre || '') : '', hora_programada: null, zona: c?.municipio || '', orden_ruta: null, estado: SERVICE_STATES.PROGRAMADO, dia_semana: getDiaSemana(p.fecha) });
       sm = smFromDb(row);
       state.servicios_metricas.push(sm);
     } catch (err) { toast('Error: ' + err.message, 'er'); return; }
@@ -166,10 +166,10 @@ export async function trackAction(smId, key) {
     if (sm.hora_programada) {
       const retraso = calcRetrasoMin(sm.hora_programada, timeStr);
       updates.retraso_min = retraso;
-      updates.estado = retraso > 5 ? 'atrasado' : 'en_curso';
-    } else { updates.estado = 'en_curso'; }
-  } else if (key === 'inicio') { updates.hora_inicio = timeStr; updates.estado = 'en_curso'; }
-  else if (key === 'fin')   { updates.hora_fin = timeStr; updates.estado = 'completado'; }
+      updates.estado = retraso > 5 ? SERVICE_STATES.ATRASADO : SERVICE_STATES.EN_PROCESO;
+    } else { updates.estado = SERVICE_STATES.EN_PROCESO; }
+  } else if (key === 'inicio') { updates.hora_inicio = timeStr; updates.estado = SERVICE_STATES.EN_PROCESO; }
+  else if (key === 'fin')   { updates.hora_fin = timeStr; updates.estado = SERVICE_STATES.COMPLETADO; }
   try {
     const { id, ...payload } = updates;
     await api.metricas.update(smId, payload);
@@ -199,7 +199,7 @@ export async function saveMotivo(smId, tipo, val) {
 export async function cancelService(smId) {
   const motivo = prompt('Motivo de cancelación:'); if (motivo === null) return;
   try {
-    const payload = { estado: 'cancelado', motivo_cancelacion: motivo || 'No especificado' };
+    const payload = { estado: SERVICE_STATES.CANCELADO, motivo_cancelacion: motivo || 'No especificado' };
     await api.metricas.update(smId, payload);
     const i = state.servicios_metricas.findIndex(s => s.id === smId);
     if (i !== -1) state.servicios_metricas[i] = { ...state.servicios_metricas[i], ...payload };

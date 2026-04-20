@@ -32,7 +32,7 @@ export default async function calendarRoutes(fastify) {
       .from('pedido_detalle').select('*').eq('pedido_id', pedidoId);
 
     try {
-      const payload         = fastify.msGraph.buildEventPayload(pedido, metrica, cliente, lineas || []);
+      const payload         = await fastify.msGraph.buildEventPayload(pedido, metrica, cliente, lineas || []);
       const existingEventId = pedido.detalles?.outlook_event_id;
 
       let eventId;

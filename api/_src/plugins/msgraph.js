@@ -1,5 +1,18 @@
 import fp from 'fastify-plugin';
 import { estimatePedidoDurationMin, addMinutesHHMM } from '../durations.js';
+import { MS_GRAPH } from '../config/external-apis.js';
+import { HTTP } from '../constants/http.js';
+import { getRuntimeConfig } from '../loaders/config-cache.js';
+
+// Iconos por tipo de producto. Si a futuro se quieren configurar por BD, mover
+// a la tabla enriquecida service_types y leer desde runtime-config.
+const ICONS = Object.freeze({
+  Abanico: '🪭',
+  Persiana: '🪟',
+  Levantamiento: '📐',
+  Limpieza: '🧹',
+  Mantenimiento: '🔧',
+});
 
 export default fp(async (fastify) => {
   const { MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MS_CALENDAR_USER } = process.env;
@@ -22,24 +35,26 @@ export default fp(async (fastify) => {
       scope:         'https://graph.microsoft.com/.default',
     });
     const res  = await fetch(
-      `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token`,
+      `${MS_GRAPH.AUTH_BASE}/${MS_TENANT_ID}/oauth2/v2.0/token`,
       { method: 'POST', body }
     );
     const json = await res.json();
     if (!json.access_token) throw new Error(`MS token error: ${json.error_description || json.error}`);
     _token       = json.access_token;
-    _tokenExpiry = Date.now() + (json.expires_in - 60) * 1000;
+    _tokenExpiry = Date.now() + (json.expires_in - MS_GRAPH.TOKEN_REFRESH_BUFFER_SEC) * 1000;
     return _token;
   }
 
-  function buildEventPayload(pedido, metrica, cliente, lineas) {
-    const ICONS = { Abanico: '🪭', Persiana: '🪟', Levantamiento: '📐', Limpieza: '🧹', Mantenimiento: '🔧' };
-    const ic     = ICONS[pedido.tipo_servicio] || '📋';
+  async function buildEventPayload(pedido, metrica, cliente, lineas) {
+    const cfg = await getRuntimeConfig(fastify.supabase).catch(() => null);
+    const durationsByTipo = cfg?.durations || {};
+
     const tipo   = pedido.tipo_servicio || 'Servicio';
+    const ic     = ICONS[tipo] || '📋';
     const nombre = cliente?.nombre || 'Sin cliente';
     const tel    = cliente?.numero || cliente?.telefono || '';
-    const hora   = (metrica?.hora_programada || '08:00').slice(0, 5);
-    const duracionEst = estimatePedidoDurationMin(tipo, lineas, pedido.cantidad);
+    const hora   = (metrica?.hora_programada || MS_GRAPH.DEFAULT_SERVICE_HOUR).slice(0, 5);
+    const duracionEst = estimatePedidoDurationMin(tipo, lineas, pedido.cantidad, durationsByTipo);
     const fin    = (metrica?.hora_fin || addMinutesHHMM(hora, duracionEst)).slice(0, 5);
     const municipio = cliente?.municipio || '';
     const zona   = cliente?.zona || metrica?.zona || '';
@@ -47,7 +62,6 @@ export default fp(async (fastify) => {
     const direccion = cliente?.direccion || '';
     const mapsUrl   = cliente?.google_maps_url || null;
 
-    // Detalles específicos por tipo de servicio
     const det = pedido.detalles || {};
     const detalleLineas = [];
     if (tipo === 'Abanico') {
@@ -76,27 +90,28 @@ export default fp(async (fastify) => {
       mapsUrl ? `<br><b>Ubicación exacta:</b> <a href="${mapsUrl}">Abrir en Google Maps</a>` : '',
     ].filter(Boolean).join('<br>');
 
-    // Location con coordenadas si están disponibles para mejor navegación
     const location = { displayName: direccion || zonaLabel || 'Sin dirección' };
     if (cliente?.lat && cliente?.lng) {
       location.coordinates = { latitude: cliente.lat, longitude: cliente.lng };
     }
 
+    const tz = cfg?.region?.timezone || MS_GRAPH.CALENDAR_TIMEZONE;
+
     return {
       subject: `${ic} ${tipo} – ${nombre}`,
       body:     { contentType: 'html', content: bodyLines },
-      start:    { dateTime: `${pedido.fecha}T${hora}:00`, timeZone: 'America/Monterrey' },
-      end:      { dateTime: `${pedido.fecha}T${fin}:00`,  timeZone: 'America/Monterrey' },
+      start:    { dateTime: `${pedido.fecha}T${hora}:00`, timeZone: tz },
+      end:      { dateTime: `${pedido.fecha}T${fin}:00`,  timeZone: tz },
       location,
       isReminderOn:                true,
-      reminderMinutesBeforeStart:  30,
+      reminderMinutesBeforeStart:  MS_GRAPH.REMINDER_MIN,
     };
   }
 
   async function createEvent(payload) {
     const token = await getToken();
     const res   = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${MS_CALENDAR_USER}/events`,
+      `${MS_GRAPH.GRAPH_BASE}/users/${MS_CALENDAR_USER}/events`,
       {
         method:  'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -110,7 +125,7 @@ export default fp(async (fastify) => {
   async function updateEvent(eventId, payload) {
     const token = await getToken();
     const res   = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${MS_CALENDAR_USER}/events/${eventId}`,
+      `${MS_GRAPH.GRAPH_BASE}/users/${MS_CALENDAR_USER}/events/${eventId}`,
       {
         method:  'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -123,10 +138,10 @@ export default fp(async (fastify) => {
   async function deleteEvent(eventId) {
     const token = await getToken();
     const res   = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${MS_CALENDAR_USER}/events/${eventId}`,
+      `${MS_GRAPH.GRAPH_BASE}/users/${MS_CALENDAR_USER}/events/${eventId}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
     );
-    if (!res.ok && res.status !== 404) throw new Error(`Graph deleteEvent ${res.status}`);
+    if (!res.ok && res.status !== HTTP.NOT_FOUND) throw new Error(`Graph deleteEvent ${res.status}`);
   }
 
   fastify.decorate('msGraph', { buildEventPayload, createEvent, updateEvent, deleteEvent });

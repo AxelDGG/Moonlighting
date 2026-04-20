@@ -2,6 +2,8 @@ import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
 import { state, cFromDb, pFromDb, pdFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
 import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
+import { ROLES, PERMISSIONS } from './constants.js';
+import { loadRuntimeConfig } from './runtime-config.js';
 
 import { renderDash } from './modules/dashboard.js';
 import { renderClientes, openClienteModal, submitCliente, editPago, savePago, deleteCliente, restoreCliente, exportClientes, toggleShowInactive } from './modules/clientes.js';
@@ -78,25 +80,25 @@ function applyRolePreflight() {
     if (ptitle) ptitle.textContent = TAB_TITLES[name] || name;
   };
 
-  if (profile.role === 'tecnico') {
+  if (profile.role === ROLES.TECNICO) {
     ['nav-dashboard', 'nav-clientes', 'nav-pedidos', 'nav-almacen', 'nav-cal', 'nav-mapa', 'nav-metricas', 'nav-configuracion'].forEach(hide);
     show('nav-tecnico');
     activate('tecnico');
     return;
   }
 
-  const admin = profile.role === 'admin';
+  const admin = profile.role === ROLES.ADMIN;
   const perms = profile.permissions || {};
 
-  if (!admin && perms.ver_dashboard  === false) hide('nav-dashboard');
-  if (!admin && perms.ver_metricas   === false) hide('nav-metricas');
-  if (!admin && perms.ver_almacen    === false) hide('nav-almacen');
-  if (!admin && perms.ver_calendario === false) hide('nav-cal');
-  if (!admin && perms.ver_mapa       === false) hide('nav-mapa');
+  if (!admin && perms[PERMISSIONS.VER_DASHBOARD]  === false) hide('nav-dashboard');
+  if (!admin && perms[PERMISSIONS.VER_METRICAS]   === false) hide('nav-metricas');
+  if (!admin && perms[PERMISSIONS.VER_ALMACEN]    === false) hide('nav-almacen');
+  if (!admin && perms[PERMISSIONS.VER_CALENDARIO] === false) hide('nav-cal');
+  if (!admin && perms[PERMISSIONS.VER_MAPA]       === false) hide('nav-mapa');
   if (admin) show('nav-configuracion'); else hide('nav-configuracion');
 
   const firstAvail = admin ? 'dashboard'
-    : perms.ver_dashboard !== false ? 'dashboard'
+    : perms[PERMISSIONS.VER_DASHBOARD] !== false ? 'dashboard'
     : 'clientes';
   activate(firstAvail);
 }
@@ -105,8 +107,8 @@ function applyRoleRestrictions() {
   const profile = state.userProfile;
   if (!profile) return;
 
-  const admin = profile.role === 'admin';
-  const isTec = profile.role === 'tecnico';
+  const admin = profile.role === ROLES.ADMIN;
+  const isTec = profile.role === ROLES.TECNICO;
   const perms = profile.permissions || {};
 
   if (isTec) {
@@ -136,6 +138,9 @@ async function loadAll() {
   setLoader(true, 'Cargando datos…');
   const errores = [];
   try {
+    // Cargar runtime-config en paralelo; si falla, se usan fallbacks.
+    loadRuntimeConfig().catch(() => {});
+
     const [clientesR, pedidosR, detalleR, metricasR, almacenR, tecnicosR, routesR, vehiR] = await Promise.allSettled([
       api.clientes.getAll(),
       api.pedidos.getAll(),

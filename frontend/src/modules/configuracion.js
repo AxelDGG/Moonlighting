@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc } from '../utils.js';
 import { toast } from '../ui.js';
 import { refreshIcons } from '../icons.js';
+import { ROLES } from '../constants.js';
 
 const PERM_LABELS = {
   ver_dashboard:   'Dashboard',
@@ -246,7 +247,7 @@ function _renderProfiles() {
   body.innerHTML = _profiles.map(p => {
     const isCurrentUser = p.id === state.userProfile?.id;
     const perms = p.permissions || {};
-    const isTecnico = p.role === 'tecnico';
+    const isTecnico = p.role === ROLES.TECNICO;
     const tecLinked = isTecnico && p.tecnico_id
       ? (state.tecnicos || []).find(t => t.id === p.tecnico_id)
       : null;
@@ -262,9 +263,9 @@ function _renderProfiles() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <select id="role-${p.id}" class="cfg-role-sel" onchange="_cfgRoleChange(this,'${p.id}')" style="padding:5px 10px;border:1px solid var(--bo);border-radius:7px;font-size:12px;background:var(--bg);color:var(--text);outline:none" ${isCurrentUser ? 'disabled' : ''}>
-            <option value="gestor" ${p.role === 'gestor' ? 'selected' : ''}>Gestor</option>
-            <option value="tecnico" ${p.role === 'tecnico' ? 'selected' : ''}>Técnico</option>
-            <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="${ROLES.GESTOR}" ${p.role === ROLES.GESTOR ? 'selected' : ''}>Gestor</option>
+            <option value="${ROLES.TECNICO}" ${p.role === ROLES.TECNICO ? 'selected' : ''}>Técnico</option>
+            <option value="${ROLES.ADMIN}" ${p.role === ROLES.ADMIN ? 'selected' : ''}>Admin</option>
           </select>
           ${!isCurrentUser ? `<button class="btn bp bsm" onclick="saveUserProfile('${p.id}')">Guardar</button>` : '<span style="font-size:11px;color:var(--mu)">(tú)</span>'}
         </div>
@@ -276,7 +277,7 @@ function _renderProfiles() {
           <option value="">— Sin vincular —</option>${tecOptions}
         </select>
       </div>` : `<div id="tec-wrap-${p.id}" style="display:none"></div>`}
-      ${p.role !== 'admin' && !isTecnico ? `
+      ${p.role !== ROLES.ADMIN && !isTecnico ? `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
         ${Object.entries(PERM_LABELS).map(([key, label]) => {
           const checked = perms[key] !== false;
@@ -285,7 +286,7 @@ function _renderProfiles() {
             <span>${label}</span>
           </label>`;
         }).join('')}
-      </div>` : p.role === 'admin' ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">Admin — acceso completo</div>' : '<div style="font-size:11px;color:var(--mu)">Acceso solo a pedidos asignados y seguimiento.</div>'}
+      </div>` : p.role === ROLES.ADMIN ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">Admin — acceso completo</div>' : '<div style="font-size:11px;color:var(--mu)">Acceso solo a pedidos asignados y seguimiento.</div>'}
     </div>`;
   }).join('');
 
@@ -309,7 +310,7 @@ export async function saveUserProfile(userId) {
   const tecnico_id = tecnicoIdEl?.value ? +tecnicoIdEl.value : null;
 
   const payload = { role, permissions };
-  if (role === 'tecnico') payload.tecnico_id = tecnico_id;
+  if (role === ROLES.TECNICO) payload.tecnico_id = tecnico_id;
 
   try {
     await api.userProfiles.update(userId, payload);
@@ -331,17 +332,15 @@ export async function addUserProfile(confirm = undefined) {
   }
   // confirm === true: submit
   const email = document.getElementById('cfg-new-email')?.value.trim();
-  const role  = document.getElementById('cfg-new-role')?.value || 'gestor';
+  const role  = document.getElementById('cfg-new-role')?.value || ROLES.GESTOR;
   if (!email) { toast('Ingresa un email', 'er'); return; }
 
-  const defaultPerms = role === 'gestor'
-    ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
-    : role === 'tecnico'
-    ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
-    : {};
+  // El backend aplica defaultPermissionsFor(role) si permissions viene omitido,
+  // así que no hace falta enviarlos desde aquí.
+  const defaultPerms = undefined;
 
   let tecnico_id = null;
-  if (role === 'tecnico') {
+  if (role === ROLES.TECNICO) {
     const modeEl = document.querySelector('input[name="cfg-tec-mode"]:checked');
     const mode = modeEl?.value || 'existing';
 
@@ -377,7 +376,8 @@ export async function addUserProfile(confirm = undefined) {
     }
   }
 
-  const body = { email, role, permissions: defaultPerms };
+  const body = { email, role };
+  if (defaultPerms) body.permissions = defaultPerms;
   if (tecnico_id) body.tecnico_id = tecnico_id;
 
   try {
@@ -395,7 +395,7 @@ export async function addUserProfile(confirm = undefined) {
 
 // Expose to HTML (used by inline onchange)
 window._cfgRoleChange = function(sel, userId) {
-  const isTec = sel.value === 'tecnico';
+  const isTec = sel.value === ROLES.TECNICO;
   const wrap = document.getElementById('tec-wrap-' + userId) || document.getElementById('cfg-new-tec-wrap');
   if (wrap) wrap.style.display = isTec ? '' : 'none';
 };

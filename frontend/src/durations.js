@@ -1,65 +1,38 @@
-// Estimación de duración de servicio, basada en promedios del negocio.
-//
-// Tiempos promedio acordados:
-//   Instalación abanico plafón / retráctil ... 20–30 min por unidad → 25 min
-//   Instalación abanico candil ............... 45–70 min por unidad → 57 min
-//   Instalación de persiana .................. 30–45 min por pieza  → 37 min
-//   Toma de medidas (Levantamiento) .......... 15–25 min por domicilio → 20 min
-//   Mantenimiento abanico plafón ............. 35–45 min → 40 min
-//   Mantenimiento abanico candil ............. 60–90 min → 75 min
-//   Arreglos (módulo, LED, detalles) ......... 20–40 min → 30 min
-//   Limpieza abanico (por unidad) ............ estimado 30 min
+// Estimación de duración — la configuración ahora vive en BD
+// (tabla service_duration_subtipos) y se carga vía runtime-config.js.
+// Este módulo es lógica pura de cálculo sobre esa config.
 
+import { getAllDurations, getDurationConfig } from './runtime-config.js';
+
+const FALLBACK_DURATION_MIN = 30;
+
+// Subtipos conocidos (para selects en UI). Si cambian, actualizar la BD y
+// sincronizar esta lista con lo que devuelva getAllDurations().
 export const SUBTIPO_ABANICO       = ['plafón', 'retráctil', 'candil'];
 export const SUBTIPO_MANTENIMIENTO = ['plafón', 'candil', 'persiana', 'arreglos'];
 
-export const DURACION_CONFIG = {
-  Abanico: {
-    perUnit: true,
-    bySubtipo: { 'plafón': 25, 'retráctil': 25, 'candil': 57 },
-    default: 25,
-    desinstalacionPerUd: 10,
-  },
-  Persiana: {
-    perUnit: true,
-    default: 37,
-  },
-  Levantamiento: {
-    perUnit: false,
-    default: 20,
-  },
-  Mantenimiento: {
-    perUnit: true,
-    bySubtipo: { 'plafón': 40, 'candil': 75, 'persiana': 35, 'arreglos': 30 },
-    default: 40,
-  },
-  Limpieza: {
-    perUnit: true,
-    default: 30,
-  },
-};
-
 export function estimateLineaDurationMin(tipoServicio, linea) {
-  const cfg = DURACION_CONFIG[tipoServicio];
-  if (!cfg) return 30;
+  const cfg = getDurationConfig(tipoServicio);
+  if (!cfg) return FALLBACK_DURATION_MIN;
   const subtipo = linea?.subTipo || linea?.sistemaInstalacion || linea?.instalacion || null;
   let base = cfg.default;
   if (cfg.bySubtipo && subtipo && cfg.bySubtipo[subtipo] != null) {
     base = cfg.bySubtipo[subtipo];
   }
+  if (base == null) base = FALLBACK_DURATION_MIN;
   const cant = cfg.perUnit ? Math.max(1, parseFloat(linea?.cantidad) || 1) : 1;
   let total = base * cant;
-  if (tipoServicio === 'Abanico' && linea?.nDesins) {
-    total += (cfg.desinstalacionPerUd || 0) * linea.nDesins;
+  if (tipoServicio === 'Abanico' && linea?.nDesins && cfg.desinstalacionPerUd) {
+    total += cfg.desinstalacionPerUd * linea.nDesins;
   }
   return Math.round(total);
 }
 
 export function estimatePedidoDurationMin(tipoServicio, lineas) {
-  const cfg = DURACION_CONFIG[tipoServicio];
-  if (!cfg) return 30;
-  if (cfg.perUnit === false) return cfg.default;
-  if (!Array.isArray(lineas) || !lineas.length) return cfg.default;
+  const cfg = getDurationConfig(tipoServicio);
+  if (!cfg) return FALLBACK_DURATION_MIN;
+  if (cfg.perUnit === false) return cfg.default ?? FALLBACK_DURATION_MIN;
+  if (!Array.isArray(lineas) || !lineas.length) return cfg.default ?? FALLBACK_DURATION_MIN;
   return lineas.reduce((s, l) => s + estimateLineaDurationMin(tipoServicio, l), 0);
 }
 
@@ -78,4 +51,10 @@ export function addMinutesHHMM(hhmm, min) {
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   const d = new Date(2000, 0, 1, h, m + (min || 0));
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// Back-compat: algunos módulos importan DURACION_CONFIG directamente. Exponer
+// un getter que lee del runtime-config.
+export function getDuracionConfig() {
+  return getAllDurations();
 }

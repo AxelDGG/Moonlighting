@@ -29,12 +29,17 @@ function renderMetKPIs() {
 
 function renderMetDonut() {
   const container = document.getElementById('met-donut'); if (!container) return;
-  const counts = { completado: 0, en_curso: 0, atrasado: 0, programado: 0, cancelado: 0 };
-  state.servicios_metricas.forEach(s => { if (counts[s.estado] !== undefined) counts[s.estado]++; });
+  // Agregamos en_proceso y en_curso al mismo bucket (en_curso es legacy pre-
+  // migración 20260420; el UPDATE de esa migración unifica a en_proceso).
+  const counts = { completado: 0, en_proceso: 0, atrasado: 0, programado: 0, cancelado: 0 };
+  state.servicios_metricas.forEach(s => {
+    const estado = s.estado === 'en_curso' ? 'en_proceso' : s.estado;
+    if (counts[estado] !== undefined) counts[estado]++;
+  });
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (!total) { container.innerHTML = '<div class="empty">Sin datos</div>'; return; }
   const entries = Object.entries(counts).filter(([, v]) => v > 0);
-  const colors = { completado: '#22c55e', en_curso: '#3b82f6', atrasado: '#ef4444', programado: '#f59e0b', cancelado: '#94a3b8' };
+  const colors = STATUS_COLORS;
   let cumAngle = 0; const radius = 42, cx = 60, cy = 60; let paths = '';
   entries.forEach(([key, val]) => {
     const pct = val / total, angle = pct * 360, startAngle = cumAngle, endAngle = cumAngle + angle;

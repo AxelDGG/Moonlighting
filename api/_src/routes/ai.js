@@ -1,4 +1,5 @@
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+import { GROQ } from '../config/external-apis.js';
+import { RATE_LIMITS } from '../config/rate-limits.js';
 
 const zonaSchema = { type: 'object', properties: { zona: { type: 'string' }, avg: { type: 'number' } } };
 const tecSchema  = { type: 'object', properties: { tec: { type: 'string' }, pct: { type: 'number' }, n: { type: 'integer' } } };
@@ -57,7 +58,7 @@ export default async function aiRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
 
   fastify.post('/feedback', {
-    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    config: { rateLimit: RATE_LIMITS.AI_FEEDBACK },
     schema: {
       body: {
         type: 'object',
@@ -89,20 +90,20 @@ export default async function aiRoutes(fastify) {
     }
     const prompt = buildPrompt(req.body);
 
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch(GROQ.ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: GROQ.MODEL,
         messages: [
           { role: 'system', content: 'Eres un consultor de operaciones experto. Responde en español, de forma directa y con los datos numéricos provistos.' },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.5,
-        max_tokens: 600,
+        temperature: GROQ.TEMPERATURE,
+        max_tokens: GROQ.MAX_TOKENS,
       }),
     });
 
@@ -113,6 +114,6 @@ export default async function aiRoutes(fastify) {
 
     const json = await res.json();
     const text = json.choices?.[0]?.message?.content || 'Sin respuesta del modelo.';
-    return { text, model: GROQ_MODEL };
+    return { text, model: GROQ.MODEL };
   });
 }

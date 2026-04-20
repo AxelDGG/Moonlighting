@@ -11,9 +11,11 @@ const bodySchema = {
   additionalProperties: false,
 };
 
+import { ROLES } from '../constants/roles.js';
+
 export default async function almacenamientoRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   fastify.get('/', async (req, reply) => {
     const { data, error } = await fastify.supabase
@@ -46,7 +48,7 @@ export default async function almacenamientoRoutes(fastify) {
   });
 
   fastify.delete('/:id', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: fastify.requireRole([ROLES.ADMIN]),
     schema: {
       params: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
     },

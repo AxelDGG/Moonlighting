@@ -7,6 +7,8 @@ import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
 import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
 import { resolveLocation } from '../geocoding.js';
+import { DEBOUNCE } from '../constants.js';
+import { getPricing } from '../runtime-config.js';
 
 let cliMode = 'ex';
 let _showCancelled = false;
@@ -36,7 +38,7 @@ export function triggerNcGeoPreview() {
   const key = `${calle}|${municipio}`;
   if (key === _lastPreviewKey) return;
   clearTimeout(_previewDebounce);
-  _previewDebounce = setTimeout(() => _runGeoPreview(calle, municipio, null, key), 400);
+  _previewDebounce = setTimeout(() => _runGeoPreview(calle, municipio, null, key), DEBOUNCE.GEOCODE);
 }
 
 let _urlDebounce = null;
@@ -52,7 +54,7 @@ export function onNcUrlInput() {
   }
 
   clearTimeout(_urlDebounce);
-  _urlDebounce = setTimeout(() => _resolveUrlAndPreview(url), 300);
+  _urlDebounce = setTimeout(() => _resolveUrlAndPreview(url), DEBOUNCE.MAP_RESOLVE);
 }
 
 async function _resolveUrlAndPreview(url) {
@@ -193,7 +195,7 @@ function _showNcMap(lat, lng, label, quality) {
 
   _ncMarker.bindTooltip(label, { permanent: false, direction: 'top' });
   // Leaflet necesita que el contenedor sea visible para calcular tamaño
-  setTimeout(() => _ncMap?.invalidateSize(), 50);
+  setTimeout(() => _ncMap?.invalidateSize(), DEBOUNCE.LEAFLET_INVALIDATE);
 }
 
 function _hideNcMap() {
@@ -260,8 +262,10 @@ export function toggleShowCancelled() {
   renderPedidos();
 }
 
-const COSTO_DESINS_UD      = 100; // $100 por abanico a desinstalar
-const COSTO_TRASLADO_DEFAULT = 0; // traslado fijo por defecto
+// Costos leídos de pricing_config (tabla Supabase). Si runtime-config no
+// resolvió todavía, se usan los fallbacks de PRICING_FALLBACK en constants.js.
+const getCostoDesinstalacion = () => getPricing('costo_desinstalacion_por_ud');
+const getCostoTrasladoDefault = () => getPricing('costo_traslado_default');
 
 // ── CLIENT DROPDOWN ──────────────────────────────────────────────────────────
 // Repuebla #p-ce leyendo state.clientes (ordenado por nombre). Seguro de llamar
@@ -321,7 +325,7 @@ function syncDomToLineas() {
 }
 
 function subtotalLinea(tipo, l) {
-  if (tipo === 'Abanico')  return l.cantidad * l.precioUnit + l.nDesins * COSTO_DESINS_UD;
+  if (tipo === 'Abanico')  return l.cantidad * l.precioUnit + l.nDesins * getCostoDesinstalacion();
   if (tipo === 'Persiana') {
     const m2 = (l.ancho / 100) * (l.alto / 100);
     return l.cantidad * m2 * l.precioUnit;
@@ -491,7 +495,7 @@ export function updatePF() {
 export function calcExtra(idx) {
   const n = parseInt(document.getElementById('p-ndesins-' + idx)?.value) || 0;
   const el = document.getElementById('desins-hint-' + idx);
-  if (el) el.textContent = n > 0 ? `+$${n * COSTO_DESINS_UD} por desinstalación` : '';
+  if (el) el.textContent = n > 0 ? `+$${n * getCostoDesinstalacion()} por desinstalación` : '';
   calcPedidoTotal();
 }
 
@@ -589,7 +593,7 @@ export function onModeloKey(e, idx) {
 }
 
 export function onModeloBlur(idx) {
-  setTimeout(() => document.getElementById('ac-modelo-' + idx)?.classList.remove('open'), 150);
+  setTimeout(() => document.getElementById('ac-modelo-' + idx)?.classList.remove('open'), DEBOUNCE.AUTOCOMPLETE);
 }
 
 export function selectModelo(idx, nombre, precio, stock) {
@@ -659,7 +663,7 @@ export function onTelaKey(e, idx) {
 }
 
 export function onTelaBlur(idx) {
-  setTimeout(() => document.getElementById('ac-tela-' + idx)?.classList.remove('open'), 150);
+  setTimeout(() => document.getElementById('ac-tela-' + idx)?.classList.remove('open'), DEBOUNCE.AUTOCOMPLETE);
 }
 
 export function selectTela(idx, nombre, precio, stock) {
@@ -729,7 +733,7 @@ export async function openPedidoModal(id = null) {
 
   // Set default traslado
   const trasladoEl = document.getElementById('p-traslado');
-  if (trasladoEl) trasladoEl.value = COSTO_TRASLADO_DEFAULT;
+  if (trasladoEl) trasladoEl.value = getCostoTrasladoDefault();
 
   if (!id) {
     document.getElementById('p-tipo').value = 'Abanico';
@@ -742,7 +746,7 @@ export async function openPedidoModal(id = null) {
     document.getElementById('p-ce').value    = p.clienteId || '';
     document.getElementById('p-tipo').value  = p.tipoServicio;
     document.getElementById('p-fecha').value = p.fecha || todayStr();
-    if (trasladoEl) trasladoEl.value = p.detalles?.traslado ?? COSTO_TRASLADO_DEFAULT;
+    if (trasladoEl) trasladoEl.value = p.detalles?.traslado ?? getCostoTrasladoDefault();
 
     // Cargar líneas: prefer pedido_detalle (nuevo), fallback al JSONB legacy
     let dets = [];

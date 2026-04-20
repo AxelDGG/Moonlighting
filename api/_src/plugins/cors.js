@@ -1,9 +1,12 @@
 import fp from 'fastify-plugin';
 import cors from '@fastify/cors';
 
+const { FRONTEND_URL, VERCEL_URL, FRONTEND_DEV_PORT } = process.env;
+const DEFAULT_FRONTEND_PORT = FRONTEND_DEV_PORT || '5173';
+
 export default fp(async (fastify) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  const vercelUrl   = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+  const frontendUrl = FRONTEND_URL || `http://localhost:${DEFAULT_FRONTEND_PORT}`;
+  const vercelUrl   = VERCEL_URL ? `https://${VERCEL_URL}` : null;
   const allowed     = new Set([frontendUrl, vercelUrl].filter(Boolean));
 
   await fastify.register(cors, {

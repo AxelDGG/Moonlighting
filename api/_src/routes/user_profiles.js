@@ -1,3 +1,7 @@
+import { ROLES, ALL_ROLES } from '../constants/roles.js';
+import { defaultPermissionsFor } from '../constants/permissions.js';
+import { SUPABASE_ERROR } from '../constants/http.js';
+
 const { ADMIN_EMAILS: ADMIN_EMAILS_ENV } = process.env;
 const ADMIN_EMAILS = (ADMIN_EMAILS_ENV || '')
   .split(',')
@@ -29,13 +33,9 @@ export default async function userProfilesRoutes(fastify) {
     let { data, error } = await fastify.supabase
       .from('user_profiles').select('*').eq('id', userId).single();
 
-    if (error && error.code === 'PGRST116') {
-      const role = ADMIN_EMAILS.includes((userEmail || '').toLowerCase()) ? 'admin' : 'gestor';
-      const defaultPerms = role === 'gestor'
-        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
-        : role === 'tecnico'
-        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
-        : {};
+    if (error && error.code === SUPABASE_ERROR.NOT_FOUND) {
+      const role = ADMIN_EMAILS.includes((userEmail || '').toLowerCase()) ? ROLES.ADMIN : ROLES.GESTOR;
+      const defaultPerms = defaultPermissionsFor(role);
       const { data: created, error: createErr } = await fastify.supabase
         .from('user_profiles').insert({ id: userId, email: userEmail, role, permissions: defaultPerms })
         .select().single();
@@ -55,7 +55,7 @@ export default async function userProfilesRoutes(fastify) {
   });
 
   // GET / - Listar todos los perfiles (solo admin)
-  fastify.get('/', { preHandler: fastify.requireRole(['admin']) }, async (req, reply) => {
+  fastify.get('/', { preHandler: fastify.requireRole([ROLES.ADMIN]) }, async (req, reply) => {
     const { data, error } = await fastify.supabase
       .from('user_profiles').select('*').order('email');
     if (error) {
@@ -67,13 +67,13 @@ export default async function userProfilesRoutes(fastify) {
 
   // PUT /:id - Actualizar rol y permisos de un usuario (solo admin)
   fastify.put('/:id', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: fastify.requireRole([ROLES.ADMIN]),
     schema: {
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       body: {
         type: 'object',
         properties: {
-          role:        { type: 'string', enum: ['admin', 'gestor', 'tecnico'] },
+          role:        { type: 'string', enum: [...ALL_ROLES] },
           permissions: permissionsSchema,
           tecnico_id:  { type: ['integer', 'null'] },
         },
@@ -93,14 +93,14 @@ export default async function userProfilesRoutes(fastify) {
 
   // POST / - Registrar un nuevo perfil para usuario que ya existe en auth.users
   fastify.post('/', {
-    preHandler: fastify.requireRole(['admin']),
+    preHandler: fastify.requireRole([ROLES.ADMIN]),
     schema: {
       body: {
         type: 'object',
         required: ['email'],
         properties: {
           email:       { type: 'string' },
-          role:        { type: 'string', enum: ['admin', 'gestor', 'tecnico'] },
+          role:        { type: 'string', enum: [...ALL_ROLES] },
           permissions: permissionsSchema,
           tecnico_id:  { type: ['integer', 'null'] },
         },
@@ -116,13 +116,8 @@ export default async function userProfilesRoutes(fastify) {
     }
     if (!uid) return reply.code(404).send({ error: 'Usuario no encontrado. Debe registrarse primero.' });
 
-    const role = req.body.role || 'gestor';
-    const permissions = req.body.permissions || (
-      role === 'gestor'
-        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: true, ver_calendario: true, ver_mapa: true }
-        : role === 'tecnico'
-        ? { ver_metricas: false, ver_dashboard: false, crear_tecnicos: false, ver_porcentajes: false, ver_almacen: false, ver_calendario: false, ver_mapa: false }
-        : {});
+    const role = req.body.role || ROLES.GESTOR;
+    const permissions = req.body.permissions || defaultPermissionsFor(role);
 
     const upsertData = { id: uid, email: req.body.email, role, permissions };
     if (req.body.tecnico_id != null) upsertData.tecnico_id = req.body.tecnico_id;

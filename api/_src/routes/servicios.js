@@ -1,9 +1,17 @@
+import { ROLES } from '../constants/roles.js';
+import {
+  SERVICE_STATES,
+  ALL_SERVICE_STATES,
+  ACTIVE_SERVICE_STATES,
+} from '../constants/service-states.js';
+import { SERVICE_CATEGORIES } from '../constants/service-types.js';
+
 const servicioBodySchema = {
   type: 'object',
   properties: {
     pedido_id:        { type: 'integer' },
     pedido_detalle_id: { type: ['integer', 'null'] },
-    tipo_servicio:    { type: 'string', enum: ['instalación', 'mantenimiento', 'entrega', 'reparación', 'levantamiento'] },
+    tipo_servicio:    { type: 'string', enum: [...SERVICE_CATEGORIES] },
     fecha_servicio:   { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
     hora_programada:  { type: ['string', 'null'], pattern: '^\\d{2}:\\d{2}$' },
     hora_llegada:     { type: ['string', 'null'], pattern: '^\\d{2}:\\d{2}$' },
@@ -12,7 +20,7 @@ const servicioBodySchema = {
     tecnico_id:       { type: ['integer', 'null'] },
     tecnico_apoyo_id: { type: ['integer', 'null'] },
     ruta_num:         { type: ['integer', 'null'] },
-    estado:           { type: 'string', enum: ['programado', 'en_ruta', 'en_proceso', 'completado', 'cancelado', 'atrasado'] },
+    estado:           { type: 'string', enum: [...ALL_SERVICE_STATES] },
     motivo_cancelacion: { type: ['string', 'null'] },
     motivo_retraso:   { type: ['string', 'null'] },
     evidencia_url:    { type: ['string', 'null'] },
@@ -23,11 +31,11 @@ const servicioBodySchema = {
 
 export default async function serviciosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
   const tecnicoOwnedMutate = async (req, reply) => {
     const role = req.profile?.role;
-    if (role === 'admin' || role === 'gestor') return;
-    if (role !== 'tecnico') return reply.code(403).send({ error: 'Sin acceso' });
+    if (role === ROLES.ADMIN || role === ROLES.GESTOR) return;
+    if (role !== ROLES.TECNICO) return reply.code(403).send({ error: 'Sin acceso' });
     const tecnicoId = req.profile?.tecnico_id;
     if (!tecnicoId) return reply.code(403).send({ error: 'Sin acceso' });
     const id = req.params?.id;
@@ -117,7 +125,7 @@ export default async function serviciosRoutes(fastify) {
   }, async (req, reply) => {
     const { error } = await fastify.supabase
       .from('servicios')
-      .update({ estado: 'cancelado' })
+      .update({ estado: SERVICE_STATES.CANCELADO })
       .eq('id', req.params.id);
     if (error) return reply.code(500).send({ error: 'Error al cancelar servicio' });
     return reply.code(204).send();
@@ -157,7 +165,7 @@ export default async function serviciosRoutes(fastify) {
         tecnicos!tecnico_id (nombre)
       `)
       .or(`tecnico_id.eq.${req.params.tecnico_id},tecnico_apoyo_id.eq.${req.params.tecnico_id}`)
-      .in('estado', ['programado', 'en_ruta', 'en_proceso', 'atrasado'])
+      .in('estado', [...ACTIVE_SERVICE_STATES, SERVICE_STATES.ATRASADO])
       .order('fecha_servicio', { ascending: true });
     if (error) return reply.code(500).send({ error: 'Error al cargar servicios' });
     return data;

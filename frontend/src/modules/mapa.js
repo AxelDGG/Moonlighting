@@ -2,10 +2,31 @@ import { state } from '../state.js';
 import { api } from '../api.js';
 import { esc, muniColor, pillPago, tipoPill, statusPill, pedidoDetalle, money, todayStr } from '../utils.js';
 import { toast } from '../ui.js';
-import { MUNIS, TIPO_IC, TIPO_BG, TIPO_CO } from '../constants.js';
+import { MUNIS_FALLBACK, TIPO_IC, TIPO_BG, TIPO_CO, DEBOUNCE, MAP_DEFAULTS, ROUTE_PLANNING } from '../constants.js';
 import { refreshIcons } from '../icons.js';
 import { MUNICIPIOS_LIST, ZONAS_POR_MUNICIPIO, zonaFromCP, zonasDeMunicipio } from '../zonas.js';
 import { resolveLocation, toClientePayload } from '../geocoding.js';
+import { getMunicipiosMap, getDefaultLocation } from '../runtime-config.js';
+
+// MUNIS se lee del runtime-config cuando disponible; si no, seed fallback.
+const MUNIS = new Proxy({}, {
+  get(_, key) {
+    const live = getMunicipiosMap();
+    return (live && live[key]) || MUNIS_FALLBACK[key];
+  },
+  has(_, key) {
+    const live = getMunicipiosMap();
+    return key in (live || {}) || key in MUNIS_FALLBACK;
+  },
+  ownKeys() {
+    const live = getMunicipiosMap();
+    return Reflect.ownKeys(live && Object.keys(live).length ? live : MUNIS_FALLBACK);
+  },
+  getOwnPropertyDescriptor(_, key) {
+    const v = this.get(_, key);
+    return v !== undefined ? { enumerable: true, configurable: true, value: v } : undefined;
+  },
+});
 
 let map = null;
 let mapMarkers = [];
@@ -14,11 +35,14 @@ let activeLayers = {};
 let routePolyline = null;
 
 // ── ROUTE PLANNER CONSTANTS ───────────────────────────────────────────────────
-const DEFAULT_LAT = 25.6866, DEFAULT_LNG = -100.3161; // Bodega base – Monterrey
-const VEL_KMH           = 30;
-const TIEMPO_SERVICIO   = 90;
-const MAX_PEDIDOS_AVISO = 6;
-const MAX_TRASLADO_AVISO = 120;
+// Lat/Lng base se lee del runtime-config (tabla geo_regions) la primera vez.
+// Los parámetros de ROUTE_PLANNING viven en constants.js; si cambian con
+// frecuencia mover a tabla route_planning_config en BD.
+const defaultLoc      = getDefaultLocation;
+const VEL_KMH           = ROUTE_PLANNING.AVG_SPEED_KMH;
+const TIEMPO_SERVICIO   = ROUTE_PLANNING.AVG_SERVICE_MIN;
+const MAX_PEDIDOS_AVISO = ROUTE_PLANNING.MAX_PER_ROUTE;
+const MAX_TRASLADO_AVISO = ROUTE_PLANNING.MAX_TRANSIT_MIN;
 
 let _mapFilterReady = false;
 let mapFilter = { nombre: '', tel: '', dir: '', tipos: new Set(), estado: '', zona: '', subzona: '', tecnico: '' };
@@ -42,20 +66,21 @@ let _mfFocused = { nombre: -1, tel: -1, dir: -1 };
 // Config de ruta activa (persistida en Supabase)
 let _activeRouteConfig = null; // { id?, tecnico_id, start_lat, start_lng, start_address, end_lat, end_lng, end_address }
 
-function getBaseLat() { return _activeRouteConfig?.start_lat ?? DEFAULT_LAT; }
-function getBaseLng() { return _activeRouteConfig?.start_lng ?? DEFAULT_LNG; }
-function getEndLat()  { return _activeRouteConfig?.end_lat   ?? DEFAULT_LAT; }
-function getEndLng()  { return _activeRouteConfig?.end_lng   ?? DEFAULT_LNG; }
+function getBaseLat() { return _activeRouteConfig?.start_lat ?? defaultLoc().lat; }
+function getBaseLng() { return _activeRouteConfig?.start_lng ?? defaultLoc().lng; }
+function getEndLat()  { return _activeRouteConfig?.end_lat   ?? defaultLoc().lat; }
+function getEndLng()  { return _activeRouteConfig?.end_lng   ?? defaultLoc().lng; }
 function getBaseAddr(){ return _activeRouteConfig?.start_address || 'Base Monterrey'; }
 function getEndAddr() { return _activeRouteConfig?.end_address   || 'Base Monterrey'; }
 
 export function initMap() {
   initMapFilter();
   if (map) { updateMapMarkers(); return; }
-  map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LNG], 11);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19
+  const loc = defaultLoc();
+  map = L.map('map').setView([loc.lat, loc.lng], loc.zoom);
+  L.tileLayer(MAP_DEFAULTS.TILE_URL, {
+    attribution: MAP_DEFAULTS.TILE_ATTRIB,
+    maxZoom: MAP_DEFAULTS.MAX_ZOOM,
   }).addTo(map);
   map.on('popupopen', e => { try { if (e.popup._contentNode) refreshIcons(e.popup._contentNode); } catch (_) {} });
   updateMapMarkers();
@@ -130,7 +155,7 @@ function getClientServiceStatus(clienteId) {
     const sm = state.servicios_metricas.find(s => s.pedido_id === p.id);
     if (!sm) continue;
     if (sm.estado === 'completado') hasCompleted = true;
-    else if (sm.estado === 'en_curso') hasInProgress = true;
+    else if (sm.estado === 'en_curso' || sm.estado === 'en_proceso' || sm.estado === 'en_ruta') hasInProgress = true;
     else if (sm.estado === 'atrasado') hasDelayed = true;
     else if (sm.estado === 'programado') hasProgramado = true;
   }
@@ -175,7 +200,7 @@ export function updateMapMarkers() {
   _drawZonePolygons(activeClientes, activeMunis);
 
   if (bounds.length === 1) map.setView(bounds[0], 14);
-  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50] });
+  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [...MAP_DEFAULTS.FIT_PADDING] });
 
   renderMapLegend();
   updateMapCount(missing.length);
@@ -340,7 +365,7 @@ async function _runGeocodeQueue() {
       } catch (_) {}
       // Actualiza contador de pendientes sin redibujar todo el mapa
       updateMapCount(_geocodePending.size);
-      if (_geocodePending.size) await new Promise(r => setTimeout(r, 1100));
+      if (_geocodePending.size) await new Promise(r => setTimeout(r, DEBOUNCE.GEOCODE_PENDING));
     }
   } finally {
     _geocodeRunning = false;
@@ -493,7 +518,7 @@ export function onMfInput(field) {
 
 export function onMfFocus(field) { renderAc(field); }
 export function onMfBlur(field) {
-  setTimeout(() => document.getElementById('mf-ac-' + field)?.classList.remove('open'), 150);
+  setTimeout(() => document.getElementById('mf-ac-' + field)?.classList.remove('open'), DEBOUNCE.AUTOCOMPLETE);
 }
 
 export function onMfKey(e, field) {
@@ -700,10 +725,10 @@ export async function saveRouteConfig() {
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
   try {
-    let startLat = _activeRouteConfig?.start_lat ?? DEFAULT_LAT;
-    let startLng = _activeRouteConfig?.start_lng ?? DEFAULT_LNG;
-    let endLat   = _activeRouteConfig?.end_lat   ?? DEFAULT_LAT;
-    let endLng   = _activeRouteConfig?.end_lng   ?? DEFAULT_LNG;
+    let startLat = _activeRouteConfig?.start_lat ?? defaultLoc().lat;
+    let startLng = _activeRouteConfig?.start_lng ?? defaultLoc().lng;
+    let endLat   = _activeRouteConfig?.end_lat   ?? defaultLoc().lat;
+    let endLng   = _activeRouteConfig?.end_lng   ?? defaultLoc().lng;
 
     if (startAddr) {
       const g = await geocode(startAddr);
@@ -766,7 +791,7 @@ function _getStoredRoutes() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
 }
 function _setStoredRoutes(routes) {
-  localStorage.setItem(LS_KEY, JSON.stringify(routes.slice(0, 30)));
+  localStorage.setItem(LS_KEY, JSON.stringify(routes.slice(0, ROUTE_PLANNING.MAX_SAVED_ROUTES)));
 }
 
 export function renderRoutesList() {
@@ -796,8 +821,8 @@ export function viewRoute(id) {
   if (!route) return;
   _lastRouteData = route;
   _renderRouteResult(route);
-  const startPt = { lat: route.startLat ?? DEFAULT_LAT, lng: route.startLng ?? DEFAULT_LNG };
-  const endPt   = { lat: route.endLat   ?? DEFAULT_LAT, lng: route.endLng   ?? DEFAULT_LNG };
+  const startPt = { lat: route.startLat ?? defaultLoc().lat, lng: route.startLng ?? defaultLoc().lng };
+  const endPt   = { lat: route.endLat   ?? defaultLoc().lat, lng: route.endLng   ?? defaultLoc().lng };
   _drawRoutePolyline([startPt, ...route.legs, endPt]);
 }
 
@@ -810,7 +835,7 @@ export function saveCurrentRoute() {
   if (!_lastRouteData) return;
   const input = document.getElementById('route-save-name');
   const nombre = input?.value.trim();
-  if (!nombre) { input?.focus(); input?.classList.add('shake'); setTimeout(() => input?.classList.remove('shake'), 400); return; }
+  if (!nombre) { input?.focus(); input?.classList.add('shake'); setTimeout(() => input?.classList.remove('shake'), DEBOUNCE.ANIMATION_SHAKE); return; }
   const tecnicoNombre = _activeRouteConfig?.tecnicos?.nombre || null;
   const route = {
     id:         'r' + Date.now(),
@@ -949,7 +974,7 @@ function _renderRouteResult({ legs, totalTravelMin, retorno, sinCoords = 0, ds, 
   const hrs = Math.floor(totalMin / 60), mins = totalMin % 60;
   const overloadPedidos  = legs.length >= MAX_PEDIDOS_AVISO;
   const overloadTraslado = totalTravelMin >= MAX_TRASLADO_AVISO;
-  const statusColors = { programado: '#f59e0b', en_curso: '#3b82f6', completado: '#22c55e', atrasado: '#ef4444' };
+  const statusColors = { programado: '#f59e0b', en_ruta: '#3b82f6', en_proceso: '#6366f1', en_curso: '#6366f1', completado: '#22c55e', atrasado: '#ef4444' };
 
   const startAddr = getBaseAddr(), endAddr = getEndAddr();
 
@@ -1040,7 +1065,7 @@ function _drawZonePolygons(activeClientes, activeMunis) {
     if (g.points.length === 1) {
       // Un único punto: círculo pequeño
       layer = L.circle(g.points[0], {
-        radius: 350, color, weight: 2, opacity: 0.55,
+        radius: MAP_DEFAULTS.ROUTE_CIRCLE_RADIUS_M, color, weight: 2, opacity: 0.55,
         fillColor: color, fillOpacity: 0.08, dashArray: '6,4', interactive: false,
       });
     } else if (g.points.length === 2) {
@@ -1049,7 +1074,7 @@ function _drawZonePolygons(activeClientes, activeMunis) {
     } else {
       // 3+ puntos: envolvente convexa expandida
       const hull = _convexHull(g.points);
-      const expanded = _expandPolygon(hull, 0.003); // ~300m
+      const expanded = _expandPolygon(hull, MAP_DEFAULTS.HULL_EXPAND_EPSILON); // ~300m
       layer = L.polygon(expanded, {
         color, weight: 2, opacity: 0.6,
         fillColor: color, fillOpacity: 0.08,

@@ -1,6 +1,8 @@
+import { ROLES } from '../constants/roles.js';
+
 export default async function vehiculosRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin']);
+  const mutate = fastify.requireRole([ROLES.ADMIN]);
 
   fastify.get('/', async (req, reply) => {
     const { data, error } = await fastify.supabase

@@ -1,3 +1,6 @@
+import { ROLES } from './constants.js';
+import { getDefaultLocation } from './runtime-config.js';
+
 // Estado global de la aplicación
 export const state = {
   // Usuario
@@ -34,7 +37,10 @@ export const state = {
 
 // Helpers de permisos
 export function isAdmin() {
-  return state.userProfile?.role === 'admin';
+  return state.userProfile?.role === ROLES.ADMIN;
+}
+export function isTecnico() {
+  return state.userProfile?.role === ROLES.TECNICO;
 }
 export function canDo(permission) {
   if (isAdmin()) return true;
@@ -118,7 +124,7 @@ export function dirFromDb(r) {
     numeroInt:        r.numero_int,
     colonia:          r.colonia,
     municipio:        r.municipio || 'Desconocido',
-    estadoMx:         r.estado_mx || 'Nuevo León',
+    estadoMx:         r.estado_mx || getDefaultLocation().estado,
     codigoPostal:     r.codigo_postal,
     referencias:      r.referencias,
     googleMapsUrl:    r.google_maps_url,
@@ -138,7 +144,7 @@ export function dirToDb(d) {
     numero_int:        d.numeroInt        || null,
     colonia:           d.colonia          || null,
     municipio:         d.municipio        || 'Desconocido',
-    estado_mx:         d.estadoMx         || 'Nuevo León',
+    estado_mx:         d.estadoMx         || getDefaultLocation().estado,
     codigo_postal:     d.codigoPostal     || null,
     referencias:       d.referencias      || null,
     google_maps_url:   d.googleMapsUrl    || null,

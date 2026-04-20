@@ -1,3 +1,5 @@
+import { TOAST_DURATION_MS } from './constants.js';
+
 export function toast(msg, type = 'ok') {
   const el = document.createElement('div');
   el.className = `toast t${type}`;
@@ -5,7 +7,7 @@ export function toast(msg, type = 'ok') {
   el.innerHTML = `<span style="display:flex;align-items:center;gap:7px"><i data-lucide="${iconName}" style="width:14px;height:14px;flex-shrink:0"></i>${msg}</span>`;
   document.getElementById('toasts')?.appendChild(el);
   if (window.lucide) try { window.lucide.createIcons({ nodes: el.querySelectorAll('[data-lucide]') }); } catch (_) {}
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => el.remove(), TOAST_DURATION_MS);
 }
 
 export function setLoader(show, msg = '') {

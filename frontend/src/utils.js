@@ -1,5 +1,12 @@
-import { PAGO_CLS, PAGO_IC, TIPO_BG, TIPO_CO, TIPO_IC, STATUS_COLORS, STATUS_BG, STATUS_LABELS, MUNIS } from './constants.js';
+import { PAGO_CLS, PAGO_IC, TIPO_BG, TIPO_CO, TIPO_IC, STATUS_COLORS, STATUS_BG, STATUS_LABELS, MUNIS_FALLBACK } from './constants.js';
 import { state } from './state.js';
+import { getMunicipiosMap } from './runtime-config.js';
+
+function getMuni(m) {
+  const live = getMunicipiosMap();
+  if (live && live[m]) return live[m];
+  return MUNIS_FALLBACK[m];
+}
 
 export function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 export function money(n) { return '$' + parseFloat(n || 0).toLocaleString('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -25,12 +32,12 @@ export function calcDuracionMin(inicio, fin) {
   return (fh * 60 + fm) - (ih * 60 + im);
 }
 
-export function muniColor(m) { return (MUNIS[m] || {}).color || '#94a3b8'; }
+export function muniColor(m) { return (getMuni(m) || {}).color || '#94a3b8'; }
 export function pillPago(p) { const cl = PAGO_CLS[p] || 'pi', n = PAGO_IC[p] || 'circle'; return `<span class="pill ${cl}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${esc(p)}</span>`; }
 export function tipoPill(t) { const bg = TIPO_BG[t] || '#f1f5f9', co = TIPO_CO[t] || '#475569', n = TIPO_IC[t] || 'package'; return `<span class="pill" style="background:${bg};color:${co}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${t}</span>`; }
 export function statusPill(estado) {
   const col = STATUS_COLORS[estado] || '#94a3b8', bg = STATUS_BG[estado] || '#f1f5f9', label = STATUS_LABELS[estado] || estado;
-  const icons = { programado: 'clock', en_curso: 'play-circle', completado: 'check-circle', cancelado: 'x-circle', atrasado: 'alert-triangle' };
+  const icons = { programado: 'clock', en_ruta: 'car', en_proceso: 'play-circle', en_curso: 'play-circle', completado: 'check-circle', cancelado: 'x-circle', atrasado: 'alert-triangle' };
   const n = icons[estado] || 'circle';
   return `<span class="pill" style="background:${bg};color:${col}"><i data-lucide="${n}" style="width:11px;height:11px;display:inline-block;vertical-align:middle"></i> ${label}</span>`;
 }

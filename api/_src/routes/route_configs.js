@@ -13,9 +13,11 @@ const bodySchema = {
   additionalProperties: false,
 };
 
+import { ROLES } from '../constants/roles.js';
+
 export default async function routeConfigsRoutes(fastify) {
   fastify.addHook('preHandler', fastify.verifyAuth);
-  const mutate = fastify.requireRole(['admin', 'gestor']);
+  const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET / - Listar configs (opcionalmente filtrar por técnico)
   fastify.get('/', async (req, reply) => {

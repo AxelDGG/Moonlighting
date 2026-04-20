@@ -25,6 +25,7 @@ Si un mismo día se crean dos migraciones, añadir sufijo: `20260419a_...`, `202
 | `20260418_find_user_by_email.sql` | RPC para buscar UUID por email |
 | `20260419_user_profiles_rls.sql` | RLS en `user_profiles` |
 | `20260419a_backfill_pedido_detalle.sql` | Backfill de pedidos legacy (JSONB `detalles`) a `pedido_detalle`. Idempotente. |
+| `20260420_hardcoded_values_to_db.sql` | Tablas de config (`pricing_config`, `service_duration_subtipos`, `geo_regions`, `municipios`, `postal_zones`, `municipio_aliases`) + normaliza `servicios_metricas.estado` (`en_curso` → `en_proceso`). Idempotente. |
 
 Las tablas base (`clientes`, `pedidos`, `pedido_detalle`, `items_catalogo`, `tecnicos`, `servicios`, `servicios_metricas`, `pagos`, `vehiculos`, `almacenamiento`, `inventario_*`, `user_profiles`, `route_configs`) y las vistas (`v_pedidos_resumen`, `v_servicios_resumen`, `v_inventario_consolidado`, `v_clientes_zona`) fueron creadas directamente en el dashboard. **Pendiente:** ejecutar `supabase db dump --schema-only` y checkear el resultado como `20260101_baseline_schema.sql` para que el repo refleje el estado real.
 
