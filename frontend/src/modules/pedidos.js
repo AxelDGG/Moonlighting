@@ -831,8 +831,6 @@ export async function submitPedido(e) {
   const eid       = document.getElementById('p-eid').value;
   const tipo      = document.getElementById('p-tipo').value;
   const fecha     = document.getElementById('p-fecha').value;
-  const qty       = parseInt(document.getElementById('p-qty').value);
-  const total     = parseFloat(document.getElementById('p-total').value);
   const pago      = document.getElementById('p-pago').value;
   const horaProg  = document.getElementById('p-hora-prog').value || null;
   const tecnico   = document.getElementById('p-tecnico').value || null;
