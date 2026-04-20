@@ -347,6 +347,7 @@ export function aFromDb(r) {
     cantidad:  r.cantidad,
     precio:    r.precio,
     notas:     r.notas,
+    subTipo:   r.sub_tipo || null,
     updatedAt: r.updated_at || r.updatedAt,
   };
 }

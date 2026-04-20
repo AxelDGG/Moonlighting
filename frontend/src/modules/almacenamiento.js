@@ -51,9 +51,12 @@ export function renderAlmacenamiento() {
       const stockCl = a.cantidad > 3 ? 'color:#15803d;font-weight:700' : a.cantidad > 0 ? 'color:#92400e;font-weight:700' : 'color:#ef4444;font-weight:700';
       const unidad  = a.categoria === 'persiana' ? '/m²' : '/ud';
       const dateStr = a.updatedAt ? fdateShort(a.updatedAt.substring(0, 10)) : '—';
+      const subTipoTag = a.categoria === 'abanico' && a.subTipo
+        ? ` <span class="pill" style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:1px 6px">${esc(a.subTipo)}</span>`
+        : '';
       return `<tr>
         <td data-label="ID" class="mob-det"><span class="pill pi">#${a.id}</span></td>
-        <td data-label="Modelo"><span class="bold">${esc(a.modelo)}</span></td>
+        <td data-label="Modelo"><span class="bold">${esc(a.modelo)}</span>${subTipoTag}</td>
         <td data-label="Tipo">${catPill}</td>
         <td data-label="Lugar" class="mob-det" style="display:flex;align-items:center;gap:5px">${lugarIc} ${esc(a.lugar || '—')}</td>
         <td data-label="Cant." class="tr" style="${stockCl}">${a.cantidad}</td>
@@ -89,33 +92,49 @@ export function openAlmacenModal(id = null) {
 
   if (id !== null) {
     const a = state.almacenamiento.find(x => x.id === id); if (!a) return;
-    document.getElementById('a-eid').value    = id;
-    document.getElementById('a-modelo').value = a.modelo;
-    document.getElementById('a-cat').value    = a.categoria;
-    document.getElementById('a-qty').value    = a.cantidad;
-    document.getElementById('a-precio').value = a.precio;
-    document.getElementById('a-notas').value  = a.notas || '';
+    document.getElementById('a-eid').value      = id;
+    document.getElementById('a-modelo').value   = a.modelo;
+    document.getElementById('a-cat').value      = a.categoria;
+    document.getElementById('a-qty').value      = a.cantidad;
+    document.getElementById('a-precio').value   = a.precio;
+    document.getElementById('a-notas').value    = a.notas || '';
+    document.getElementById('a-subtipo').value  = a.subTipo || '';
   }
+  onAlmacenCatChange();
   openOv('ov-almacen');
+}
+
+// Mostrar/ocultar el select de subtipo según la categoría seleccionada.
+export function onAlmacenCatChange() {
+  const cat  = document.getElementById('a-cat')?.value;
+  const wrap = document.getElementById('a-subtipo-wrap');
+  if (wrap) wrap.style.display = cat === 'abanico' ? '' : 'none';
 }
 
 export async function submitAlmacen(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-sa');
   btn.innerHTML = '<span class="sp"></span> Guardando…'; btn.disabled = true;
-  const eid    = document.getElementById('a-eid').value;
-  const modelo = document.getElementById('a-modelo').value.trim();
-  const cat    = document.getElementById('a-cat').value;
-  const lugar  = document.getElementById('a-lugar').value;
-  const qty    = parseInt(document.getElementById('a-qty').value);
-  const precio = parseFloat(document.getElementById('a-precio').value);
-  const notas  = document.getElementById('a-notas').value.trim() || null;
+  const eid     = document.getElementById('a-eid').value;
+  const modelo  = document.getElementById('a-modelo').value.trim();
+  const cat     = document.getElementById('a-cat').value;
+  const lugar   = document.getElementById('a-lugar').value;
+  const qty     = parseInt(document.getElementById('a-qty').value);
+  const precio  = parseFloat(document.getElementById('a-precio').value);
+  const notas   = document.getElementById('a-notas').value.trim() || null;
+  const subTipo = cat === 'abanico'
+    ? (document.getElementById('a-subtipo').value || null)
+    : null;
   try {
-    const body = { modelo, categoria: cat, lugar, cantidad: qty, precio, notas };
+    const body = { modelo, categoria: cat, lugar, cantidad: qty, precio, notas, sub_tipo: subTipo };
     if (eid) {
       await api.almacenamiento.update(+eid, body);
       const i = state.almacenamiento.findIndex(x => x.id === +eid);
-      if (i !== -1) state.almacenamiento[i] = { ...state.almacenamiento[i], ...body, updatedAt: new Date().toISOString() };
+      if (i !== -1) state.almacenamiento[i] = {
+        ...state.almacenamiento[i],
+        modelo, categoria: cat, lugar, cantidad: qty, precio, notas,
+        subTipo, updatedAt: new Date().toISOString(),
+      };
       toast('Inventario actualizado');
     } else {
       const row = await api.almacenamiento.create(body);

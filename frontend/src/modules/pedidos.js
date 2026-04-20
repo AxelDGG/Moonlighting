@@ -1,11 +1,11 @@
 import { state, cFromDb, pFromDb, pToDb, cToDb, smFromDb, pdFromDb, pdToDb } from '../state.js';
 import { api } from '../api.js';
 import { esc, money, fdateShort, tipoPill, pedidoDetalle, statusPill, todayStr, getDiaSemana, downloadCSV } from '../utils.js';
-import { SUBTIPO_ABANICO, SUBTIPO_MANTENIMIENTO, estimatePedidoDurationMin, fmtDuracion } from '../durations.js';
+import { SUBTIPO_MANTENIMIENTO, estimatePedidoDurationMin, fmtDuracion } from '../durations.js';
 import { toast, openOv, closeOv, badge, initMobileRows } from '../ui.js';
 import { renderDash } from './dashboard.js';
 import { refreshIcons } from '../icons.js';
-import { zonaFromCP, MUNICIPIOS_LIST, parseGoogleMapsUrl } from '../zonas.js';
+import { zonaFromCP, getMunicipiosList, parseGoogleMapsUrl } from '../zonas.js';
 import { resolveLocation } from '../geocoding.js';
 import { DEBOUNCE } from '../constants.js';
 import { getPricing } from '../runtime-config.js';
@@ -348,24 +348,21 @@ function lineaCardHtml(tipo, l, i, solo) {
 
   let body = '';
   if (tipo === 'Abanico') {
-    const subOpts = SUBTIPO_ABANICO.map(s =>
-      `<option value="${s}"${l.subTipo === s ? ' selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('');
+    // El subtipo (plafón/candil/retráctil) se define en almacén y se hereda
+    // automáticamente al elegir el modelo. Aquí solo se muestra como label.
+    const subLabel = l.subTipo
+      ? `<span class="pill" style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:1px 6px">${esc(l.subTipo)}</span>`
+      : `<span class="mu" style="font-size:10px">Definir en almacén</span>`;
     body = `
       <div class="fi full">
-        <label>Modelo *</label>
+        <label>Modelo * <span style="font-weight:400;color:var(--mu);font-size:10px">— el tipo de instalación se hereda del almacén</span></label>
         <div class="ac-wrap">
           <input id="p-modelo-${i}" type="text" autocomplete="off" required value="${esc(l.modelo)}"
                  placeholder="Escribe para buscar modelo…"
                  oninput="onModeloInput(${i})" onkeydown="onModeloKey(event,${i})" onblur="onModeloBlur(${i})"/>
           <div class="ac-list" id="ac-modelo-${i}"></div>
         </div>
-        <div id="modelo-info-${i}" style="display:flex;align-items:center;gap:8px;margin-top:4px"></div>
-      </div>
-      <div class="fi"><label>Instalación</label>
-        <select id="p-subtipo-${i}" onchange="calcPedidoTotal()">
-          <option value=""${!l.subTipo ? ' selected' : ''}>— Plafón —</option>
-          ${subOpts}
-        </select>
+        <div id="modelo-info-${i}" style="display:flex;align-items:center;gap:8px;margin-top:4px">${subLabel}</div>
       </div>
       <div class="fi"><label>Cant. *</label>
         <input id="p-qty-${i}" type="number" min="1" value="${l.cantidad}" required oninput="calcPedidoTotal()"/>
@@ -551,8 +548,9 @@ function getAggregated(categoria) {
   state.almacenamiento
     .filter(a => a.categoria === categoria)
     .forEach(a => {
-      if (!map[a.modelo]) map[a.modelo] = { modelo: a.modelo, precio: a.precio, cantidad: 0 };
+      if (!map[a.modelo]) map[a.modelo] = { modelo: a.modelo, precio: a.precio, cantidad: 0, subTipo: a.subTipo || null };
       map[a.modelo].cantidad += a.cantidad;
+      if (!map[a.modelo].subTipo && a.subTipo) map[a.modelo].subTipo = a.subTipo;
     });
   return Object.values(map).sort((a, b) => a.modelo.localeCompare(b.modelo));
 }
@@ -568,14 +566,16 @@ export function onModeloInput(idx) {
   const ac = document.getElementById('ac-modelo-' + idx);
   if (lineasForm[idx]) lineasForm[idx].acIdx = -1;
   if (!list.length) { ac?.classList.remove('open'); return; }
-  ac.innerHTML = list.map((m, i) =>
-    `<div class="ac-item" data-idx="${i}"
+  ac.innerHTML = list.map((m, i) => {
+    const sub = m.subTipo ? `<span class="ac-item-meta" style="font-size:10px;color:#3730a3">${esc(m.subTipo)}</span>` : '';
+    return `<div class="ac-item" data-idx="${i}"
          onmousedown="selectModelo(${idx},'${esc(m.modelo).replace(/'/g, "\\'")}',${m.precio},${m.cantidad})">
        <span class="ac-item-name">${highlight(m.modelo, q)}</span>
+       ${sub}
        <span class="ac-item-stock ${stockClass(m.cantidad)}">Disp: ${m.cantidad}</span>
        <span class="ac-item-meta">${money(m.precio)}/ud</span>
-     </div>`
-  ).join('');
+     </div>`;
+  }).join('');
   ac.classList.add('open');
 }
 
@@ -605,6 +605,9 @@ export function selectModelo(idx, nombre, precio, stock) {
     lineasForm[idx].precioUnit = precio;
     lineasForm[idx].stock      = stock;
     lineasForm[idx].acIdx      = -1;
+    // El subtipo se hereda del inventario (definido en almacén).
+    const agg = getAggregated('abanico').find(m => m.modelo === nombre);
+    lineasForm[idx].subTipo = agg?.subTipo || '';
   }
   _updateModeloInfo(idx, nombre, precio, stock);
   calcPedidoTotal();
@@ -613,17 +616,19 @@ export function selectModelo(idx, nombre, precio, stock) {
 function _updateModeloInfo(idx, nombre, precio, stock) {
   const el = document.getElementById('modelo-info-' + idx);
   if (!el) return;
+  const agg = getAggregated('abanico').find(m => m.modelo === nombre);
+  const subTipo = lineasForm[idx]?.subTipo || agg?.subTipo || '';
+  const subHtml = subTipo
+    ? `<span class="pill" style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:1px 6px">${esc(subTipo)}</span>`
+    : `<span class="mu" style="font-size:10px">Definir en almacén</span>`;
   if (precio > 0) {
-    const qty = typeof stock !== 'undefined' && stock !== null ? stock : (() => {
-      const agg = getAggregated('abanico').find(m => m.modelo === nombre);
-      return agg ? agg.cantidad : null;
-    })();
+    const qty = typeof stock !== 'undefined' && stock !== null ? stock : (agg ? agg.cantidad : null);
     const stockHtml = qty !== null
       ? `<span class="ac-item-stock ${stockClass(qty)}" style="border-radius:10px;padding:1px 8px">Disp: ${qty} ud</span>`
       : '';
-    el.innerHTML = `<span style="font-size:11px;color:var(--mu)">${money(precio)}/ud</span>${stockHtml ? '&nbsp;&nbsp;' + stockHtml : ''}`;
+    el.innerHTML = `${subHtml}&nbsp;&nbsp;<span style="font-size:11px;color:var(--mu)">${money(precio)}/ud</span>${stockHtml ? '&nbsp;&nbsp;' + stockHtml : ''}`;
   } else {
-    el.innerHTML = '';
+    el.innerHTML = subHtml;
   }
 }
 
@@ -693,7 +698,7 @@ function _updateTelaInfo(idx, precio, stock) {
 function _populateMuniSelect() {
   const sel = document.getElementById('nc-muni');
   if (!sel || sel.dataset.populated) return;
-  MUNICIPIOS_LIST.forEach(m => {
+  getMunicipiosList().forEach(m => {
     const opt = document.createElement('option');
     opt.value = m;
     opt.textContent = m;
@@ -786,9 +791,10 @@ function _lineaFromDetalle(d, tipo) {
   if (tipo === 'Abanico') {
     l.modelo  = d.modeloAbanico || d.descripcion || '';
     l.nDesins = d.desinstalarCantidad || 0;
-    l.subTipo = d.sistemaInstalacion || '';
     const agg = getAggregated('abanico').find(m => m.modelo === l.modelo);
     if (agg) l.stock = agg.cantidad;
+    // Subtipo: usar el guardado en el pedido; si está vacío, heredar del inventario.
+    l.subTipo = d.sistemaInstalacion || agg?.subTipo || '';
   } else if (tipo === 'Persiana') {
     l.tipoTela    = d.telaColor || '';
     l.ancho       = d.anchoM ? d.anchoM * 100 : '';

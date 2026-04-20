@@ -18,7 +18,7 @@ import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcI
          generateDayRoute, onRouteDayChange, openRouteConfig, saveRouteConfig, closeRouteConfig, onRouteConfigChange,
          viewRoute, deleteRoute, saveCurrentRoute, renderRoutesList } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
-import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo } from './modules/almacenamiento.js';
+import { renderAlmacenamiento, openAlmacenModal, submitAlmacen, deleteAlmacen, openVehiculosManager, submitVehiculo, deleteVehiculo, onAlmacenCatChange } from './modules/almacenamiento.js';
 import { openTecnicosManager, openTecnicoModal, submitTecnico, deleteTecnico } from './modules/tecnicos.js';
 import { renderConfiguracion, saveUserProfile, addUserProfile, deleteUserProfile, cfgAddVehiculo, cfgDeleteVehiculo } from './modules/configuracion.js';
 import { renderTecnicoView } from './modules/tecnico_view.js';
@@ -368,6 +368,7 @@ window.renderAlmacenamiento = renderAlmacenamiento;
 window.openAlmacenModal     = openAlmacenModal;
 window.submitAlmacen        = submitAlmacen;
 window.deleteAlmacen        = deleteAlmacen;
+window.onAlmacenCatChange   = onAlmacenCatChange;
 window.openVehiculosManager = openVehiculosManager;
 window.submitVehiculo       = submitVehiculo;
 window.deleteVehiculo       = deleteVehiculo;

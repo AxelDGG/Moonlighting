@@ -3,10 +3,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Los datos canónicos viven en Supabase (tabla `postal_zones` + `municipios`)
-// y se cargan vía runtime-config.js. Este archivo sigue exportando la API
-// legacy (ZONAS_POR_MUNICIPIO, zonaFromCP, parseAddress, parseGoogleMapsUrl)
-// para no romper los callers; los lookups consultan primero el runtime-config
-// y caen al seed local si aún no está disponible.
+// y se cargan vía runtime-config.js. Este archivo expone funciones
+// (getMunicipiosList, zonaFromCP, parseAddress, parseGoogleMapsUrl) que
+// consultan primero el runtime-config y caen al seed local si aún no está
+// disponible.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import {
@@ -84,33 +84,11 @@ function getZonasDict() {
   return SEED_ZONAS;
 }
 
-// Back-compat: `ZONAS_POR_MUNICIPIO` importado en otros módulos. Usa un Proxy
-// para que cada acceso consulte los datos vivos.
-export const ZONAS_POR_MUNICIPIO = new Proxy({}, {
-  get(_, key) { return getZonasDict()[key]; },
-  has(_, key) { return key in getZonasDict(); },
-  ownKeys()   { return Reflect.ownKeys(getZonasDict()); },
-  getOwnPropertyDescriptor(_, key) {
-    const v = getZonasDict()[key];
-    return v !== undefined ? { enumerable: true, configurable: true, value: v } : undefined;
-  },
-});
-
 export function getMunicipiosList() {
   const rt = _rtMunicipiosList();
   if (rt && rt.length) return rt;
   return Object.keys(SEED_ZONAS);
 }
-
-// Back-compat: importado como constante en otros módulos.
-export const MUNICIPIOS_LIST = new Proxy([], {
-  get(_, prop) {
-    const list = getMunicipiosList();
-    if (prop === 'length') return list.length;
-    if (typeof prop === 'string' && /^\d+$/.test(prop)) return list[Number(prop)];
-    return list[prop];
-  },
-});
 
 export function zonaFromCP(municipio, cp) {
   if (!municipio || cp == null) return null;

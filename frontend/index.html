@@ -588,10 +588,18 @@
         <div class="fg">
           <div class="fi full"><label>Modelo *</label><input id="a-modelo" type="text" required placeholder='Ej: Hunter Pacific Elite 52" o Screen 3%'/></div>
           <div class="fi"><label>Categoría *</label>
-            <select id="a-cat" required>
+            <select id="a-cat" required onchange="onAlmacenCatChange()">
               <option value="abanico">Abanico</option>
               <option value="persiana">Tela/Persiana</option>
               <option value="refacciones">Refacciones</option>
+            </select>
+          </div>
+          <div class="fi" id="a-subtipo-wrap"><label>Tipo de instalación</label>
+            <select id="a-subtipo">
+              <option value="">— Sin especificar —</option>
+              <option value="plafón">Plafón</option>
+              <option value="candil">Candil</option>
+              <option value="retráctil">Retráctil</option>
             </select>
           </div>
           <div class="fi"><label>Lugar *</label>

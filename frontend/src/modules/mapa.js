@@ -2,31 +2,11 @@ import { state } from '../state.js';
 import { api } from '../api.js';
 import { esc, muniColor, pillPago, tipoPill, statusPill, pedidoDetalle, money, todayStr } from '../utils.js';
 import { toast } from '../ui.js';
-import { MUNIS_FALLBACK, TIPO_IC, TIPO_BG, TIPO_CO, DEBOUNCE, MAP_DEFAULTS, ROUTE_PLANNING } from '../constants.js';
+import { TIPO_IC, TIPO_BG, TIPO_CO, DEBOUNCE, MAP_DEFAULTS, ROUTE_PLANNING } from '../constants.js';
 import { refreshIcons } from '../icons.js';
-import { MUNICIPIOS_LIST, ZONAS_POR_MUNICIPIO, zonaFromCP, zonasDeMunicipio } from '../zonas.js';
+import { getMunicipiosList, zonaFromCP, zonasDeMunicipio } from '../zonas.js';
 import { resolveLocation, toClientePayload } from '../geocoding.js';
-import { getMunicipiosMap, getDefaultLocation } from '../runtime-config.js';
-
-// MUNIS se lee del runtime-config cuando disponible; si no, seed fallback.
-const MUNIS = new Proxy({}, {
-  get(_, key) {
-    const live = getMunicipiosMap();
-    return (live && live[key]) || MUNIS_FALLBACK[key];
-  },
-  has(_, key) {
-    const live = getMunicipiosMap();
-    return key in (live || {}) || key in MUNIS_FALLBACK;
-  },
-  ownKeys() {
-    const live = getMunicipiosMap();
-    return Reflect.ownKeys(live && Object.keys(live).length ? live : MUNIS_FALLBACK);
-  },
-  getOwnPropertyDescriptor(_, key) {
-    const v = this.get(_, key);
-    return v !== undefined ? { enumerable: true, configurable: true, value: v } : undefined;
-  },
-});
+import { getDefaultLocation } from '../runtime-config.js';
 
 let map = null;
 let mapMarkers = [];
@@ -436,7 +416,7 @@ function initMapFilter() {
   const zonaSelect = document.getElementById('mf-zona');
   if (zonaSelect && zonaSelect.options.length <= 1) {
     // Poblar con municipios de la tabla de zonas (fuente canónica)
-    MUNICIPIOS_LIST.forEach(muni => {
+    getMunicipiosList().forEach(muni => {
       const opt = document.createElement('option');
       opt.value = muni;
       opt.textContent = muni;

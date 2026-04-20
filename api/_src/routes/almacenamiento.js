@@ -7,6 +7,7 @@ const bodySchema = {
     cantidad:  { type: 'integer', minimum: 0 },
     precio:    { type: 'number', minimum: 0 },
     notas:     { type: ['string', 'null'] },
+    sub_tipo:  { type: ['string', 'null'] },
   },
   additionalProperties: false,
 };
