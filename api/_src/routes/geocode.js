@@ -290,6 +290,21 @@ export default async function geocodeRoutes(fastify) {
   });
 
   // POST /resolve-short   body: { url }  → sigue redirect de maps.app.goo.gl
+  //
+  // SSRF: solo permitimos seguir redirects que apunten a hosts de Google. Un
+  // Location: que apunte a IPs internas (169.254.169.254, 127.0.0.1, etc.) o
+  // dominios externos arbitrarios se rechaza, abortando la cadena.
+  const ALLOWED_REDIRECT_HOST = /(?:^|\.)(google\.com|goo\.gl|google\.com\.mx)$/i;
+  function isAllowedRedirectUrl(rawUrl) {
+    try {
+      const u = new URL(rawUrl);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+      return ALLOWED_REDIRECT_HOST.test(u.hostname);
+    } catch {
+      return false;
+    }
+  }
+
   fastify.post('/resolve-short', {
     ...routeRL,
     schema: {
@@ -304,20 +319,29 @@ export default async function geocodeRoutes(fastify) {
       return reply.code(400).send({ error: 'No es una URL corta de Google Maps' });
     }
     try {
-      // Seguir hasta 5 redirects manualmente
+      // Seguir hasta 5 redirects manualmente, validando cada hop
       let current = url, finalUrl = null;
       for (let i = 0; i < 5; i++) {
+        if (!isAllowedRedirectUrl(current)) {
+          req.log.warn({ url: current }, 'resolve-short: redirect host bloqueado');
+          return reply.code(400).send({ error: 'Cadena de redirects no permitida' });
+        }
         const res = await fetch(current, { redirect: 'manual', headers: { 'User-Agent': USER_AGENT } });
         const loc = res.headers.get('location');
         if (res.status >= HTTP.REDIRECT_MIN && res.status < HTTP.REDIRECT_MAX && loc) {
-          current = loc;
-          finalUrl = loc;
+          // Resolver Location relativos contra la URL actual
+          const next = new URL(loc, current).toString();
+          current = next;
+          finalUrl = next;
         } else {
           finalUrl = finalUrl || current;
           break;
         }
       }
       if (!finalUrl) return reply.code(404).send({ error: 'No se pudo resolver la URL' });
+      if (!isAllowedRedirectUrl(finalUrl)) {
+        return reply.code(400).send({ error: 'URL final no permitida' });
+      }
       return { url: finalUrl };
     } catch (err) {
       req.log.warn({ err: err.message }, 'resolve-short error');

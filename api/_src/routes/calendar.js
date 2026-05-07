@@ -50,8 +50,9 @@ export default async function calendarRoutes(fastify) {
 
       return reply.send({ ok: true, eventId });
     } catch (err) {
+      // No exponer detalles del error de Graph (URLs internas, tenant ids, tokens) al cliente
       req.log.error({ err }, 'Outlook sync failed');
-      return reply.code(500).send({ error: err.message });
+      return reply.code(500).send({ error: 'Error al sincronizar con Outlook' });
     }
   });
 }

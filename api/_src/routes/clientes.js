@@ -1,15 +1,65 @@
 import { ROLES } from '../constants/roles.js';
 import { MAX_LENGTHS } from '../constants/limits.js';
 
-const bodySchemaNew = {
+const clienteSchema = {
   type: 'object',
   properties: {
     nombre:       { type: 'string', minLength: 1, maxLength: MAX_LENGTHS.NOMBRE },
     telefono:     { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
     telefono_alt: { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
-    email:        { type: ['string', 'null'] },
-    notas_cliente:{ type: ['string', 'null'] },
+    email:        { type: ['string', 'null'], maxLength: 320 },
+    notas_cliente:{ type: ['string', 'null'], maxLength: 2000 },
   },
+  required: ['nombre'],
+  additionalProperties: false,
+};
+
+// Acepta los dos formatos: legacy plano (nombre, numero, direccion, ...) y
+// nuevo anidado ({ cliente: {...}, direccion: {...} }). Sin schema, cualquier
+// columna podía colarse al insert (mass assignment).
+const postBodySchema = {
+  type: 'object',
+  oneOf: [
+    {
+      // Formato nuevo
+      type: 'object',
+      properties: {
+        cliente:   clienteSchema,
+        direccion: { type: ['object', 'null'] },
+      },
+      required: ['cliente'],
+      additionalProperties: false,
+    },
+    {
+      // Formato legacy plano — solo se permiten estos campos
+      type: 'object',
+      properties: {
+        nombre:               { type: 'string', minLength: 1, maxLength: MAX_LENGTHS.NOMBRE },
+        telefono:             { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
+        telefono_alt:         { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
+        numero:               { type: ['string', 'null'], maxLength: MAX_LENGTHS.TELEFONO },
+        email:                { type: ['string', 'null'], maxLength: 320 },
+        notas_cliente:        { type: ['string', 'null'], maxLength: 2000 },
+        direccion:            { type: ['string', 'null'] },
+        municipio:            { type: ['string', 'null'], maxLength: MAX_LENGTHS.ZONA_NAME },
+        zona:                 { type: ['string', 'null'], maxLength: MAX_LENGTHS.ZONA_NAME },
+        codigo_postal:        { type: ['string', 'null'], maxLength: 10 },
+        lat:                  { type: ['number', 'null'] },
+        lng:                  { type: ['number', 'null'] },
+        metodo_pago:          { type: ['string', 'null'] },
+        num_pedido:           { type: ['string', 'null'] },
+        google_maps_url:      { type: ['string', 'null'], maxLength: MAX_LENGTHS.GOOGLE_MAPS_URL },
+        geocode_source:       { type: ['string', 'null'] },
+        geocode_confidence:   { type: ['string', 'null'] },
+        ubicacion_verificada: { type: ['boolean', 'null'] },
+        verified_at:          { type: ['string', 'null'] },
+        reverse_municipio:    { type: ['string', 'null'] },
+        reverse_cp:           { type: ['string', 'null'] },
+      },
+      required: ['nombre'],
+      additionalProperties: false,
+    },
+  ],
 };
 
 const direccionSchema = {
@@ -64,7 +114,7 @@ export default async function clientesRoutes(fastify) {
   });
 
   // POST / - Crear cliente (acepta formato legacy plano O nuevo anidado)
-  fastify.post('/', { preHandler: mutate }, async (req, reply) => {
+  fastify.post('/', { preHandler: mutate, schema: { body: postBodySchema } }, async (req, reply) => {
     const body = req.body || {};
 
     // Formato legacy: { nombre, numero, direccion, municipio, lat, lng, metodo_pago, ... }
