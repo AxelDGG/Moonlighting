@@ -229,7 +229,7 @@ function _setGeoPreview(state, g) {
     msg = 'Verificando ubicación…';
   } else if (state === 'url') {
     msg = g?.displayName
-      ? `Ubicación confirmada — ${g.displayName}`
+      ? `Ubicación confirmada — ${esc(g.displayName)}`
       : 'Coordenadas obtenidas de Google Maps.';
   } else if (state === 'ok') {
     msg = `Ubicación encontrada: <b>${esc(g.displayName || g.municipio || '')}</b>`;

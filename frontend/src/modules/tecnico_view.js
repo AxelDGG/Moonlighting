@@ -2,9 +2,26 @@ import { state } from '../state.js';
 import { esc, money, fdate, tipoPill, statusPill, pedidoDetalle, todayStr } from '../utils.js';
 import { refreshIcons } from '../icons.js';
 
+// Solo aceptamos URLs https a hosts conocidos de Maps. esc() en el href
+// previene attribute injection pero no `javascript:` ni `data:` URIs, así que
+// validamos el scheme/host antes de exponer el botón "Ir en Maps".
+const SAFE_MAPS_HOST = /^(?:[a-z0-9-]+\.)*(?:google\.com|google\.com\.mx|goo\.gl|waze\.com)$/i;
+function safeMapsUrl(raw) {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:') return null;
+    return SAFE_MAPS_HOST.test(u.hostname) ? u.toString() : null;
+  } catch { return null; }
+}
+
 function mapsUrl(c) {
   if (!c) return null;
-  if (c.googleMapsUrl) return c.googleMapsUrl;
+  if (c.googleMapsUrl) {
+    const safe = safeMapsUrl(c.googleMapsUrl);
+    if (safe) return safe;
+    // Si la URL almacenada no es segura, caemos al fallback de coords/dirección
+  }
   if (c.lat != null && c.lng != null) return `https://www.google.com/maps?q=${c.lat},${c.lng}`;
   if (c.direccion) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.direccion)}`;
   return null;
