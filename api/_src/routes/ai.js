@@ -1,17 +1,33 @@
 import { GROQ } from '../config/external-apis.js';
 import { RATE_LIMITS } from '../config/rate-limits.js';
 
+// Capturado al cargar el módulo — un cambio post-deploy requiere redeploy.
+const GROQ_API_KEY = process.env.GROQ_API_KEY || null;
+
 const zonaSchema = { type: 'object', properties: { zona: { type: 'string' }, avg: { type: 'number' } } };
 const tecSchema  = { type: 'object', properties: { tec: { type: 'string' }, pct: { type: 'number' }, n: { type: 'integer' } } };
 const tipoSchema = { type: 'object', properties: { tipo: { type: 'string' }, avg: { type: 'number' } } };
 const diaSchema  = { type: 'object', properties: { dia: { type: 'string' }, avg: { type: 'number' } } };
 
+// Sanitiza valores libres antes de interpolarlos al prompt LLM. Bloquea
+// saltos de línea, headers markdown y tokens de "system" que podrían usarse
+// como prompt injection desde nombres de técnicos o motivos editables.
+function sanitizePromptValue(s, maxLen = 120) {
+  return String(s ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/<\|[^|]*\|>/g, '')
+    .replace(/<<[^>]*>>/g, '')
+    .replace(/^#+\s*/gm, '')
+    .slice(0, maxLen)
+    .trim();
+}
+
 function buildPrompt(d) {
-  const zonas   = d.zonas.length    ? d.zonas.map(z => `- ${z.zona}: ${z.avg} min prom.`).join('\n') : 'Sin datos';
-  const tecs    = d.tecnicos.length ? d.tecnicos.map(t => `- ${t.tec}: ${t.pct}% completados (${t.n} servicios)`).join('\n') : 'Sin datos';
-  const tipos   = d.tipos.length    ? d.tipos.map(t => `- ${t.tipo}: ${t.avg} min prom.`).join('\n') : 'Sin datos';
-  const dias    = d.dias.slice(0, 5).map(x => `- ${x.dia}: ${x.avg} min prom.`).join('\n') || 'Sin datos';
-  const motivos = d.motivos.length  ? d.motivos.join(', ') : 'Sin datos';
+  const zonas   = d.zonas.length    ? d.zonas.map(z => `- ${sanitizePromptValue(z.zona)}: ${Number(z.avg) || 0} min prom.`).join('\n') : 'Sin datos';
+  const tecs    = d.tecnicos.length ? d.tecnicos.map(t => `- ${sanitizePromptValue(t.tec)}: ${Number(t.pct) || 0}% completados (${Number(t.n) || 0} servicios)`).join('\n') : 'Sin datos';
+  const tipos   = d.tipos.length    ? d.tipos.map(t => `- ${sanitizePromptValue(t.tipo)}: ${Number(t.avg) || 0} min prom.`).join('\n') : 'Sin datos';
+  const dias    = d.dias.slice(0, 5).map(x => `- ${sanitizePromptValue(x.dia)}: ${Number(x.avg) || 0} min prom.`).join('\n') || 'Sin datos';
+  const motivos = d.motivos.length  ? d.motivos.map(m => sanitizePromptValue(m, 80)).filter(Boolean).join(', ') || 'Sin datos' : 'Sin datos';
 
   return `Eres un consultor de operaciones para Moonlighting, empresa de instalación de abanicos y persianas en Monterrey, NL.
 
@@ -84,8 +100,7 @@ export default async function aiRoutes(fastify) {
       },
     },
   }, async (req, reply) => {
-    const groqApiKey = process.env.GROQ_API_KEY;
-    if (!groqApiKey) {
+    if (!GROQ_API_KEY) {
       return reply.code(503).send({ error: 'GROQ_API_KEY no configurado en el servidor' });
     }
     const prompt = buildPrompt(req.body);
@@ -94,7 +109,7 @@ export default async function aiRoutes(fastify) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqApiKey}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
         model: GROQ.MODEL,

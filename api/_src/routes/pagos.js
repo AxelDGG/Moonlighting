@@ -1,17 +1,11 @@
 import { ROLES } from '../constants/roles.js';
 import { QUERY_LIMITS } from '../constants/limits.js';
 
+// Delega el cálculo a una función Postgres con FOR UPDATE.
+// Migración: db/migrations/20260507_recompute_pedido_saldo_atomic.sql
 async function recomputePedidoSaldo(supabase, pedidoId) {
-  const [{ data: pedido }, { data: pagos }] = await Promise.all([
-    supabase.from('pedidos').select('total').eq('id', pedidoId).single(),
-    supabase.from('pagos').select('monto').eq('pedido_id', pedidoId),
-  ]);
-  const totalPagado = (pagos || []).reduce((sum, p) => sum + (p.monto || 0), 0);
-  const nuevoSaldo = (pedido?.total || 0) - totalPagado;
-  await supabase
-    .from('pedidos')
-    .update({ anticipo: totalPagado, saldo: Math.max(0, nuevoSaldo) })
-    .eq('id', pedidoId);
+  const { error } = await supabase.rpc('recompute_pedido_saldo', { p_pedido_id: pedidoId });
+  if (error) throw error;
 }
 
 const pagoBodySchema = {
@@ -56,7 +50,19 @@ export default async function pagosRoutes(fastify) {
   });
 
   // GET / - Listar todos los pagos (con filtros opcionales)
-  fastify.get('/', async (req, reply) => {
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          metodo_pago_id: { type: 'integer', minimum: 1 },
+          desde:          { type: 'string', format: 'date' },
+          hasta:          { type: 'string', format: 'date' },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
     let query = fastify.supabase
       .from('pagos')
       .select(`
