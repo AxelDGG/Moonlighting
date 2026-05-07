@@ -62,7 +62,20 @@ export default async function metricasRoutes(fastify) {
   }
 
   fastify.get('/', async (req, reply) => {
-    const { data, error } = await fastify.supabase.from('servicios_metricas').select('*').order('id');
+    let query = fastify.supabase.from('servicios_metricas').select('*').order('id');
+
+    // Si es técnico, restringir a sus propios registros (la columna `tecnico` es
+    // un string con el nombre, no FK — se resuelve vía user_profiles.tecnico_id → tecnicos.nombre).
+    if (req.profile?.role === ROLES.TECNICO) {
+      const tecnicoId = req.profile?.tecnico_id;
+      if (!tecnicoId) return [];
+      const { data: tec } = await fastify.supabase
+        .from('tecnicos').select('nombre').eq('id', tecnicoId).single();
+      if (!tec?.nombre) return [];
+      query = query.eq('tecnico', tec.nombre);
+    }
+
+    const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'Error al cargar métricas' });
     return data;
   });

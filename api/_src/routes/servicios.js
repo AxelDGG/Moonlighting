@@ -49,10 +49,19 @@ export default async function serviciosRoutes(fastify) {
 
   // GET / - Listar servicios con resumen
   fastify.get('/', async (req, reply) => {
-    const { data, error } = await fastify.supabase
+    let query = fastify.supabase
       .from('v_servicios_resumen')
       .select('*')
       .order('fecha_servicio', { ascending: false });
+
+    // Si es técnico, solo ve los servicios asignados a él (titular o apoyo)
+    if (req.profile?.role === ROLES.TECNICO) {
+      const tid = req.profile?.tecnico_id;
+      if (!tid) return [];
+      query = query.or(`tecnico_id.eq.${tid},tecnico_apoyo_id.eq.${tid}`);
+    }
+
+    const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'Error al cargar servicios' });
     return data;
   });
@@ -75,6 +84,14 @@ export default async function serviciosRoutes(fastify) {
       .eq('id', req.params.id)
       .single();
     if (error) return reply.code(500).send({ error: 'Error al cargar servicio' });
+
+    // Si es técnico, validar ownership
+    if (req.profile?.role === ROLES.TECNICO) {
+      const tid = req.profile?.tecnico_id;
+      if (!tid || (data.tecnico_id !== tid && data.tecnico_apoyo_id !== tid)) {
+        return reply.code(403).send({ error: 'Sin acceso' });
+      }
+    }
     return data;
   });
 
@@ -137,7 +154,7 @@ export default async function serviciosRoutes(fastify) {
       params: { type: 'object', properties: { fecha: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }, required: ['fecha'] },
     },
   }, async (req, reply) => {
-    const { data, error } = await fastify.supabase
+    let query = fastify.supabase
       .from('servicios')
       .select(`
         *,
@@ -147,6 +164,14 @@ export default async function serviciosRoutes(fastify) {
       `)
       .eq('fecha_servicio', req.params.fecha)
       .order('hora_programada', { ascending: true });
+
+    if (req.profile?.role === ROLES.TECNICO) {
+      const tid = req.profile?.tecnico_id;
+      if (!tid) return [];
+      query = query.or(`tecnico_id.eq.${tid},tecnico_apoyo_id.eq.${tid}`);
+    }
+
+    const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'Error al cargar servicios' });
     return data;
   });
@@ -157,6 +182,12 @@ export default async function serviciosRoutes(fastify) {
       params: { type: 'object', properties: { tecnico_id: { type: 'integer' } }, required: ['tecnico_id'] },
     },
   }, async (req, reply) => {
+    // Un técnico solo puede consultar su propio tecnico_id
+    if (req.profile?.role === ROLES.TECNICO) {
+      if (req.params.tecnico_id !== req.profile?.tecnico_id) {
+        return reply.code(403).send({ error: 'Sin acceso' });
+      }
+    }
     const { data, error } = await fastify.supabase
       .from('servicios')
       .select(`
