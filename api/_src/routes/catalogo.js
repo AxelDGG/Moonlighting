@@ -2,6 +2,12 @@ import { ROLES } from '../constants/roles.js';
 import { MEASUREMENT_UNITS } from '../constants/units.js';
 import { MAX_LENGTHS, QUERY_LIMITS } from '../constants/limits.js';
 
+// Escapa metacaracteres del filtro PostgREST para evitar inyección de operadores
+// adicionales cuando el valor del usuario se interpola en .or() / .ilike().
+function sanitizePostgrestLike(s) {
+  return String(s || '').replace(/[,()*%\\]/g, ' ').trim();
+}
+
 const itemBodySchema = {
   type: 'object',
   properties: {
@@ -27,7 +33,17 @@ export default async function catalogoRoutes(fastify) {
   const mutate = fastify.requireRole([ROLES.ADMIN]);
 
   // GET / - Listar items del catálogo
-  fastify.get('/', async (req, reply) => {
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          categoria_id: { type: 'integer', minimum: 1 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
     let query = fastify.supabase
       .from('items_catalogo')
       .select(`
@@ -143,10 +159,18 @@ export default async function catalogoRoutes(fastify) {
   // GET /buscar/:query - Buscar items por nombre o SKU
   fastify.get('/buscar/:query', {
     schema: {
-      params: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+      params: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: 50 },
+        },
+        required: ['query'],
+      },
     },
   }, async (req, reply) => {
-    const searchTerm = `%${req.params.query}%`;
+    const safe = sanitizePostgrestLike(req.params.query);
+    if (!safe) return [];
+    const searchTerm = `%${safe}%`;
     const { data, error } = await fastify.supabase
       .from('items_catalogo')
       .select('*')

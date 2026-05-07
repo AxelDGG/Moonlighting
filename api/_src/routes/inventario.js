@@ -81,7 +81,19 @@ export default async function inventarioRoutes(fastify) {
   });
 
   // GET /movimientos - Listar movimientos con filtros
-  fastify.get('/movimientos', async (req, reply) => {
+  fastify.get('/movimientos', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          item_id:       { type: 'integer', minimum: 1 },
+          ubicacion_id:  { type: 'integer', minimum: 1 },
+          tipo:          { type: 'string', enum: [...INVENTORY_MOVEMENT_TYPES] },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
     let query = fastify.supabase
       .from('inventario_movimientos')
       .select(`
@@ -92,11 +104,12 @@ export default async function inventarioRoutes(fastify) {
       `)
       .order('created_at', { ascending: false });
 
-    // Aplicar filtros si existen
+    // Aplicar filtros (validados como integer/enum por el schema → seguros para .or())
     if (req.query.item_id) query = query.eq('item_catalogo_id', req.query.item_id);
-    if (req.query.ubicacion_id) query = query.or(
-      `ubicacion_origen_id.eq.${req.query.ubicacion_id},ubicacion_destino_id.eq.${req.query.ubicacion_id}`
-    );
+    if (req.query.ubicacion_id) {
+      const uid = req.query.ubicacion_id;
+      query = query.or(`ubicacion_origen_id.eq.${uid},ubicacion_destino_id.eq.${uid}`);
+    }
     if (req.query.tipo) query = query.eq('tipo_movimiento', req.query.tipo);
 
     const { data, error } = await query.limit(QUERY_LIMITS.MOVIMIENTOS);
