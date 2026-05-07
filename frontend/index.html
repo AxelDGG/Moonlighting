@@ -152,14 +152,14 @@
         <div class="card">
           <div class="ch">
             <h2>Registro de Pedidos</h2>
-            <div style="display:flex;gap:8px">
+            <div class="ch-actions">
               <button class="btn bg bsm" id="btn-toggle-cancelled" onclick="toggleShowCancelled()" title="Mostrar cancelados">
                 <i data-lucide="eye-off" style="width:13px;height:13px"></i> Cancelados
               </button>
               <button class="btn bg bsm" onclick="exportPedidos()">
                 <i data-lucide="download" style="width:13px;height:13px"></i> Exportar CSV
               </button>
-              <button class="btn bp" onclick="openPedidoModal()">
+              <button class="btn bp bsm" onclick="openPedidoModal()">
                 <i data-lucide="plus" style="width:14px;height:14px"></i> Nuevo pedido
               </button>
             </div>
@@ -225,14 +225,14 @@
       <!-- CALENDARIO -->
       <section class="tab" id="tab-cal">
         <div class="card">
-          <div class="ch">
-            <div style="display:flex;gap:7px;align-items:center">
+          <div class="ch cal-ch">
+            <div class="cal-nav">
               <button class="btn bg bsm" onclick="calNav(-1)">&#9664;</button>
-              <span id="cal-title" style="font-weight:600;font-size:13.5px;min-width:200px;text-align:center"></span>
+              <span id="cal-title"></span>
               <button class="btn bg bsm" onclick="calNav(1)">&#9654;</button>
               <button class="btn bg bsm" onclick="calToday()">Hoy</button>
             </div>
-            <div style="display:flex;gap:5px">
+            <div class="cal-mode">
               <button class="btn bp bsm" id="btn-cw" onclick="setCalMode('week')">Semana</button>
               <button class="btn bg bsm" id="btn-cd" onclick="setCalMode('day')">Día</button>
             </div>

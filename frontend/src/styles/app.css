@@ -271,7 +271,15 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
 }
+
+.ch-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Calendar header — desktop defaults */
+.cal-ch .cal-nav { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.cal-ch .cal-mode { display: flex; gap: 5px; flex-shrink: 0; }
+#cal-title { font-weight: 600; font-size: 13.5px; min-width: 200px; text-align: center; }
 
 .ch h2 {
     font-size: 13.5px;
@@ -1156,14 +1164,31 @@ code { font-family: 'Consolas', monospace; background: #f1f5f9; padding: 2px 5px
   #sidebar-overlay.show { display: block; }
 
   /* ── CARD HEADERS ── */
-  .ch { flex-wrap: wrap; gap: 8px; }
+  .ch { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .ch h2 { width: 100%; }
+  .ch-actions { width: 100%; justify-content: flex-start; }
+  .ch-actions .btn { flex: 1 1 auto; justify-content: center; min-width: 0; }
 
   /* ── ALMACÉN ── */
   #tab-almacen .sr { flex-direction: column; }
   #fa-cat { min-width: 0 !important; width: 100%; }
 
   /* ── CALENDARIO ── */
-  #tab-cal .ch { justify-content: center; }
+  #tab-cal .ch { justify-content: center; padding: 10px 12px; }
+  .cal-ch .cal-nav,
+  .cal-ch .cal-mode { width: 100%; justify-content: center; }
+  .cal-ch .cal-nav { gap: 6px; }
+  #cal-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cal-ch .cal-mode .btn { flex: 1 1 0; justify-content: center; }
+
   #cal-body { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 12px 0; }
   .cal-week { min-width: 560px; padding: 0 12px; }
 
