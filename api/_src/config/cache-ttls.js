@@ -5,7 +5,7 @@ const {
 } = process.env;
 
 export const CACHE_TTLS = Object.freeze({
-  PROFILE_MS:            Number(PROFILE_CACHE_TTL_MS) || 60_000,
+  PROFILE_MS:            Number(PROFILE_CACHE_TTL_MS) || 15_000,
   GEOCODING_DAYS:        Number(GEOCODING_CACHE_TTL_DAYS) || 90,
   RUNTIME_CONFIG_MS:     Number(RUNTIME_CONFIG_TTL_MS) || 5 * 60_000,
 });

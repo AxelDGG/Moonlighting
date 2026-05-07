@@ -19,7 +19,7 @@ const permissionsSchema = {
     ver_calendario:  { type: 'boolean' },
     ver_mapa:        { type: 'boolean' },
   },
-  additionalProperties: true,
+  additionalProperties: false,
 };
 
 export default async function userProfilesRoutes(fastify) {
@@ -34,7 +34,12 @@ export default async function userProfilesRoutes(fastify) {
       .from('user_profiles').select('*').eq('id', userId).single();
 
     if (error && error.code === SUPABASE_ERROR.NOT_FOUND) {
-      const role = ADMIN_EMAILS.includes((userEmail || '').toLowerCase()) ? ROLES.ADMIN : ROLES.GESTOR;
+      // Solo otorgar admin si (a) el email está en el allowlist Y (b) el correo
+      // está verificado por Supabase Auth. Defense-in-depth contra OAuth providers
+      // que no marcan email_confirmed_at.
+      const emailVerified = req.user?.email_confirmed_at != null;
+      const inAdminList = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
+      const role = (emailVerified && inAdminList) ? ROLES.ADMIN : ROLES.GESTOR;
       const defaultPerms = defaultPermissionsFor(role);
       const { data: created, error: createErr } = await fastify.supabase
         .from('user_profiles').insert({ id: userId, email: userEmail, role, permissions: defaultPerms })

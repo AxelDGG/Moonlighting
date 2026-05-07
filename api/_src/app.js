@@ -30,7 +30,9 @@ export async function createApp() {
     logger: process.env.NODE_ENV === 'production'
       ? { level: 'warn' }
       : { level: 'info' },
-    trustProxy: true,
+    // Confiamos solo en 1 hop (el proxy de Vercel). Esto previene que un
+    // atacante prepende valores falsos en X-Forwarded-For para evadir rate-limit.
+    trustProxy: 1,
   });
 
   // Security plugins (order matters)
