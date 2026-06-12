@@ -100,6 +100,8 @@ After any `innerHTML` update that includes icons, call `refreshIcons()` (from `u
 
 All modal overlays pre-exist in `index.html` with IDs like `ov-cli`, `ov-ped`, `ov-track`. Modules expose `open*Modal(id)` to populate the form and call `openOv('ov-*')`, and `submit*()` to POST and refresh state. Closing calls `closeOv('ov-*')`.
 
+El modal de pedido (`ov-ped`) es un wizard de 3 pasos (Cliente → Servicio → Programación): divs `#ped-step-N`, navegación con `pedGoStep/pedNext/pedBack` (pedidos.js), validación inline por paso (`_validatePedStep`, clases `.fi.invalid` + `.err-msg`). El form usa `novalidate` — no depender de `required` HTML nativo (rompería el submit con campos en pasos ocultos).
+
 ### Data layer
 
 `state.js` holds master data (`clientes`, `catalogo`, `tecnicos`, `metodoPago`, `estadosPedido`) and operational data (`pedidos`, `servicios`, `pagos`). Loaded once via `loadAll()`. All mutations go through `api.js` — no direct Supabase calls from modules.
@@ -113,6 +115,8 @@ Routes also accept legacy field names (e.g., `numero`/`telefono`) and normalize 
 Routes use PostgREST nested selects (e.g., `select('*, clientes(*)')`). Several read endpoints query **database views** (`v_pedidos_resumen`, `v_servicios_resumen`, `v_inventario_consolidado`) — changes to underlying tables must keep these views consistent.
 
 Soft delete: deleting a `pedido` sets `estado_id = 'cancelado'` rather than removing the row. Before deleting a `cliente`, the route nullifies all their `pedidos.cliente_id` to avoid FK violations.
+
+`pedidos.anticipo`/`saldo` se recalculan en la DB con el trigger `pagos_recalc_saldo` (ver `db/migrations/20260612_pagos_saldo_trigger.sql`) — las rutas de `pagos` NO deben recalcular saldos manualmente (race condition).
 
 ### Rate limiting
 

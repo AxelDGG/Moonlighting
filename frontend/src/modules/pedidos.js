@@ -11,6 +11,8 @@ import { DEBOUNCE } from '../constants.js';
 import { getPricing } from '../runtime-config.js';
 
 let cliMode = 'ex';
+let _pedStep = 1;
+const PED_STEPS = 3;
 let _showCancelled = false;
 
 // Líneas del pedido en edición. Cada línea:
@@ -252,6 +254,97 @@ function _setGeoPreview(state, g) {
   if (typeof refreshIcons === 'function') refreshIcons(el);
 }
 
+// ── WIZARD + VALIDACIÓN INLINE (modal pedido) ────────────────────────────────
+function _setFieldError(id, msg) {
+  const input = document.getElementById(id);
+  const fi = input?.closest('.fi');
+  if (!fi) return;
+  fi.classList.add('invalid');
+  let em = fi.querySelector('.err-msg');
+  if (!em) { em = document.createElement('div'); em.className = 'err-msg'; fi.appendChild(em); }
+  em.textContent = msg;
+  const clear = () => fi.classList.remove('invalid');
+  input.addEventListener('input', clear, { once: true });
+  input.addEventListener('change', clear, { once: true });
+}
+
+function _clearFieldErrors(root) {
+  (root || document.getElementById('fp'))?.querySelectorAll('.fi.invalid')
+    .forEach(fi => fi.classList.remove('invalid'));
+}
+
+function _validatePedStep(n) {
+  const stepEl = document.getElementById(`ped-step-${n}`);
+  if (stepEl) _clearFieldErrors(stepEl);
+  let ok = true;
+  const req = (id, msg) => {
+    const v = (document.getElementById(id)?.value || '').trim();
+    if (!v) { _setFieldError(id, msg); ok = false; }
+    return v;
+  };
+  if (n === 1 && cliMode === 'nw') {
+    req('nc-n', 'Ingresa el nombre del cliente');
+    req('nc-t', 'Ingresa el teléfono');
+    req('nc-calle', 'Ingresa la calle y número');
+    const muni = document.getElementById('nc-muni')?.value || _ncGeoResult?.municipio;
+    if (!muni) { _setFieldError('nc-muni', 'Selecciona el municipio o pega una URL de Google Maps arriba'); ok = false; }
+  }
+  if (n === 2) {
+    const tipo = req('p-tipo', 'Selecciona el tipo de servicio');
+    req('p-fecha', 'Selecciona la fecha');
+    // Validación por línea (los campos son dinámicos: p-modelo-0, p-ancho-1, …)
+    if (tipo) {
+      syncDomToLineas();
+      lineasForm.forEach((l, i) => {
+        if (tipo === 'Abanico' && !l.modelo) { _setFieldError(`p-modelo-${i}`, 'Indica el modelo del abanico'); ok = false; }
+        if (tipo === 'Persiana') {
+          if (!(l.ancho > 0)) { _setFieldError(`p-ancho-${i}`, 'Indica el ancho en cm'); ok = false; }
+          if (!(l.alto > 0))  { _setFieldError(`p-alto-${i}`, 'Indica el alto en cm'); ok = false; }
+        }
+        if (!(l.cantidad >= 1)) { _setFieldError(`p-qty-${i}`, 'Cantidad mínima: 1'); ok = false; }
+      });
+    }
+  }
+  return ok;
+}
+
+function _setPedStep(n) {
+  _pedStep = n;
+  for (let i = 1; i <= PED_STEPS; i++) {
+    const el = document.getElementById(`ped-step-${i}`);
+    if (el) el.style.display = i === n ? '' : 'none';
+  }
+  const ind = document.getElementById('ped-steps');
+  if (ind) {
+    ind.querySelectorAll('.step-dot').forEach(d => {
+      const s = +d.dataset.step;
+      d.classList.toggle('on', s === n);
+      d.classList.toggle('done', s < n);
+    });
+    ind.querySelectorAll('.step-line').forEach((l, i) => l.classList.toggle('done', i + 1 < n));
+  }
+  const show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; };
+  show('btn-ped-back', n > 1);
+  show('btn-ped-next', n < PED_STEPS);
+  show('btn-sp', n === PED_STEPS);
+  // Leaflet necesita recalcular tamaño si el mini mapa vuelve a ser visible
+  if (n === 1 && _ncMap) setTimeout(() => _ncMap?.invalidateSize(), 60);
+  document.querySelector('#ov-ped .modal')?.scrollTo?.(0, 0);
+}
+
+export function pedGoStep(n) {
+  // Avanzar valida los pasos intermedios; retroceder es libre
+  if (n > _pedStep) {
+    for (let s = _pedStep; s < n; s++) {
+      if (!_validatePedStep(s)) { _setPedStep(s); return; }
+    }
+  }
+  _setPedStep(n);
+}
+
+export function pedNext() { pedGoStep(Math.min(PED_STEPS, _pedStep + 1)); }
+export function pedBack() { _setPedStep(Math.max(1, _pedStep - 1)); }
+
 export function toggleShowCancelled() {
   _showCancelled = !_showCancelled;
   const btn = document.getElementById('btn-toggle-cancelled');
@@ -293,7 +386,7 @@ export function setCliMode(m) {
   document.getElementById('cli-nw').style.display = m === 'nw' ? '' : 'none';
   document.getElementById('btn-ex').className = 'mode-btn' + (m === 'ex' ? ' on' : '');
   document.getElementById('btn-nw').className = 'mode-btn' + (m === 'nw' ? ' on' : '');
-  ['nc-n', 'nc-t', 'nc-d'].forEach(id => { const el = document.getElementById(id); if (el) el.required = m === 'nw'; });
+  _clearFieldErrors(document.getElementById('ped-step-1'));
 }
 
 // ── LÍNEAS DEL PEDIDO ────────────────────────────────────────────────────────
@@ -710,6 +803,8 @@ function _populateMuniSelect() {
 export async function openPedidoModal(id = null) {
   document.getElementById('fp').reset();
   document.getElementById('p-eid').value = '';
+  _clearFieldErrors();
+  _setPedStep(1);
   _populateMuniSelect();
   // Resetear estado del geocoder preview
   _ncGeoResult = null;
@@ -874,6 +969,10 @@ function _lineaFromLegacy(p) {
 // ── SUBMIT ───────────────────────────────────────────────────────────────────
 export async function submitPedido(e) {
   e.preventDefault();
+  // Enter en un paso intermedio avanza, no guarda
+  if (_pedStep < PED_STEPS) { pedNext(); return; }
+  if (!_validatePedStep(1)) { _setPedStep(1); return; }
+  if (!_validatePedStep(2)) { _setPedStep(2); return; }
   const btn = document.getElementById('btn-sp');
   btn.innerHTML = '<span class="sp"></span> Guardando…'; btn.disabled = true;
   const eid       = document.getElementById('p-eid').value;
@@ -893,9 +992,6 @@ export async function submitPedido(e) {
       const municipio = document.getElementById('nc-muni').value || _ncGeoResult?.municipio || '';
       const url       = document.getElementById('nc-url')?.value.trim() || '';
 
-      if (!calle)     { alert('Ingresa la calle y número.'); throw new Error('Falta calle'); }
-      if (!municipio) { alert('Selecciona el municipio (o pega una URL de Google Maps para detectarlo automáticamente).'); throw new Error('Falta municipio'); }
-
       // CP y zona vienen del reverse geocode del pin — no del formulario
       const cp   = _ncGeoResult?.codigoPostal || null;
       const zona = cp ? zonaFromCP(municipio, cp) : null;
@@ -911,7 +1007,8 @@ export async function submitPedido(e) {
       if (!loc && url) {
         const r = await resolveLocation({ url });
         if (r?.error === 'low_zoom_search') {
-          alert(`La URL tiene zoom muy alejado. Abre el pin del lugar en Google Maps y copia esa URL.`);
+          _setPedStep(1);
+          _setFieldError('nc-url', 'La URL tiene zoom muy alejado — abre el pin del lugar en Google Maps y copia esa URL.');
           throw new Error('URL imprecisa');
         }
         loc = r?.lat != null ? r : null;

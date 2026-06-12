@@ -455,8 +455,18 @@
   <div class="modal">
     <div class="mh"><h3 id="mp-t">Nuevo Pedido</h3><button class="mc" onclick="closeOv('ov-ped')"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
     <div class="mb">
-      <form id="fp" onsubmit="submitPedido(event)">
+      <div class="step-ind" id="ped-steps">
+        <button type="button" class="step-dot on" data-step="1" onclick="pedGoStep(1)"><span>1</span> Cliente</button>
+        <div class="step-line"></div>
+        <button type="button" class="step-dot" data-step="2" onclick="pedGoStep(2)"><span>2</span> Servicio</button>
+        <div class="step-line"></div>
+        <button type="button" class="step-dot" data-step="3" onclick="pedGoStep(3)"><span>3</span> Programación</button>
+      </div>
+      <form id="fp" onsubmit="submitPedido(event)" novalidate>
         <input type="hidden" id="p-eid"/>
+
+        <!-- PASO 1: CLIENTE -->
+        <div class="ped-step" id="ped-step-1">
         <div class="fg">
           <div class="fi full">
             <label>Cliente</label>
@@ -505,8 +515,14 @@
               </div>
             </div>
           </div>
+        </div>
+        </div>
+
+        <!-- PASO 2: SERVICIO -->
+        <div class="ped-step" id="ped-step-2" style="display:none">
+        <div class="fg">
           <div class="fi"><label>Tipo de servicio *</label>
-            <select id="p-tipo" onchange="updatePF()" required>
+            <select id="p-tipo" onchange="updatePF()">
               <option value="">— Seleccionar —</option>
               <option value="Abanico">Abanico de Techo</option>
               <option value="Persiana">Persiana</option>
@@ -515,7 +531,7 @@
               <option value="Mantenimiento">Mantenimiento</option>
             </select>
           </div>
-          <div class="fi"><label>Fecha *</label><input id="p-fecha" type="date" required/></div>
+          <div class="fi"><label>Fecha *</label><input id="p-fecha" type="date"/></div>
 
           <!-- LÍNEAS DEL PEDIDO (dinámicas según tipo) -->
           <div class="fi full fdiv" id="r-lineas-hd" style="display:none">Ítems del pedido</div>
@@ -528,7 +544,7 @@
 
           <!-- COMUNES -->
           <div class="fi"><label>Traslado ($)</label><input id="p-traslado" type="number" min="0" step="1" value="0" oninput="calcPedidoTotal()" title="Costo fijo de traslado — se suma al total automáticamente"/></div>
-          <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" required readonly style="background:#f8fafc" title="Calculado automáticamente"/></div>
+          <div class="fi"><label>Total ($) *</label><input id="p-total" type="number" min="0" step="0.01" readonly style="background:#f8fafc" title="Calculado automáticamente"/></div>
           <div class="fi full" id="p-duracion-wrap" style="display:none">
             <div style="background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px">
               <i data-lucide="timer" style="width:14px;height:14px"></i>
@@ -544,14 +560,18 @@
               <option value="Credito">Crédito</option>
             </select>
           </div>
+        </div>
+        </div>
 
-          <!-- TRACKING -->
-          <div class="fi full fdiv">Tracking</div>
+        <!-- PASO 3: PROGRAMACIÓN -->
+        <div class="ped-step" id="ped-step-3" style="display:none">
+        <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Opcional — puedes asignar técnico y horario ahora o después desde Seguimiento.</div>
+        <div class="fg">
           <div class="fi"><label>Hora Prog.</label><input id="p-hora-prog" type="time"/></div>
           <div class="fi">
             <label style="display:flex;justify-content:space-between;align-items:center">
               Técnico
-              <button type="button" class="btn bg bsm" onclick="openTecnicosManager()" title="Gestionar técnicos" style="font-size:10px;padding:2px 7px">
+              <button type="button" class="btn bg bsm" onclick="openTecnicosManager()" title="Gestionar técnicos" style="font-size:10px;padding:2px 7px;min-height:unset">
                 <i data-lucide="settings" style="width:11px;height:11px"></i>
               </button>
             </label>
@@ -561,9 +581,17 @@
           </div>
           <div class="fi"><label>Ruta #</label><input id="p-orden-ruta" type="number" min="1"/></div>
         </div>
+        </div>
+
         <div class="fa">
+          <button type="button" class="btn bg" id="btn-ped-back" onclick="pedBack()" style="display:none">
+            <i data-lucide="arrow-left" style="width:14px;height:14px"></i> Atrás
+          </button>
           <button type="button" class="btn bg" onclick="closeOv('ov-ped')">Cancelar</button>
-          <button type="submit" class="btn bp" id="btn-sp">Guardar</button>
+          <button type="button" class="btn bp" id="btn-ped-next" onclick="pedNext()">
+            Siguiente <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+          </button>
+          <button type="submit" class="btn bp" id="btn-sp" style="display:none">Guardar</button>
         </div>
       </form>
     </div>

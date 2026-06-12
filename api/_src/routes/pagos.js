@@ -1,13 +1,9 @@
 import { ROLES } from '../constants/roles.js';
 import { QUERY_LIMITS } from '../constants/limits.js';
 
-// Delega el cálculo a una función Postgres con FOR UPDATE.
-// Migración: db/migrations/20260507_recompute_pedido_saldo_atomic.sql
-async function recomputePedidoSaldo(supabase, pedidoId) {
-  const { error } = await supabase.rpc('recompute_pedido_saldo', { p_pedido_id: pedidoId });
-  if (error) throw error;
-}
-
+// pedidos.anticipo/saldo se recalculan en la DB con el trigger
+// pagos_recalc_saldo (db/migrations/20260612_pagos_saldo_trigger.sql) —
+// estas rutas NO deben recalcular saldos manualmente.
 const pagoBodySchema = {
   type: 'object',
   properties: {
@@ -109,7 +105,6 @@ export default async function pagosRoutes(fastify) {
       return reply.code(500).send({ error: 'Error al registrar pago' });
     }
 
-    await recomputePedidoSaldo(fastify.supabase, req.body.pedido_id);
     return reply.code(201).send(pagoData);
   });
 
@@ -122,14 +117,13 @@ export default async function pagosRoutes(fastify) {
     },
   }, async (req, reply) => {
     const { data: pagoAnterior } = await fastify.supabase
-      .from('pagos').select('pedido_id').eq('id', req.params.id).single();
+      .from('pagos').select('id').eq('id', req.params.id).single();
     if (!pagoAnterior) return reply.code(404).send({ error: 'Pago no encontrado' });
 
     const { error } = await fastify.supabase
       .from('pagos').update(req.body).eq('id', req.params.id);
     if (error) return reply.code(500).send({ error: 'Error al actualizar pago' });
 
-    await recomputePedidoSaldo(fastify.supabase, pagoAnterior.pedido_id || req.body.pedido_id);
     return reply.code(204).send();
   });
 
@@ -141,14 +135,13 @@ export default async function pagosRoutes(fastify) {
     },
   }, async (req, reply) => {
     const { data: pago } = await fastify.supabase
-      .from('pagos').select('pedido_id').eq('id', req.params.id).single();
+      .from('pagos').select('id').eq('id', req.params.id).single();
     if (!pago) return reply.code(404).send({ error: 'Pago no encontrado' });
 
     const { error } = await fastify.supabase
       .from('pagos').delete().eq('id', req.params.id);
     if (error) return reply.code(500).send({ error: 'Error al eliminar pago' });
 
-    await recomputePedidoSaldo(fastify.supabase, pago.pedido_id);
     return reply.code(204).send();
   });
 }

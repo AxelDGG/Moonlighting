@@ -11,7 +11,8 @@ import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedid
          calcPedidoTotal, onModeloInput, onModeloKey, onModeloBlur, selectModelo,
          onTelaInput, onTelaKey, onTelaBlur, selectTela, toggleShowCancelled,
          triggerNcGeoPreview, onNcUrlInput,
-         addLinea, removeLinea, togglePedidoExpand } from './modules/pedidos.js';
+         addLinea, removeLinea, togglePedidoExpand,
+         pedGoStep, pedNext, pedBack } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
 import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
@@ -316,6 +317,9 @@ window.toggleShowCancelled   = toggleShowCancelled;
 window.addLinea              = addLinea;
 window.removeLinea           = removeLinea;
 window.togglePedidoExpand    = togglePedidoExpand;
+window.pedGoStep             = pedGoStep;
+window.pedNext               = pedNext;
+window.pedBack               = pedBack;
 
 // Calendar
 window.renderCal          = renderCal;

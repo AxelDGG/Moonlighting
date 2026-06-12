@@ -175,7 +175,7 @@ export function renderTecnicoView() {
           <b>Notas:</b> ${esc(p.notasOperativas)}
         </div>` : ''}
 
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
           ${maps ? `<a href="${esc(maps)}" target="_blank" rel="noopener" class="btn bp bsm" style="text-decoration:none">
             <i data-lucide="navigation" style="width:13px;height:13px"></i> Ir en Maps
           </a>` : ''}

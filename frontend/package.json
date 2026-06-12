@@ -5,13 +5,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
     "leaflet": "^1.9.4"
   },
   "devDependencies": {
-    "vite": "^6.3.3"
+    "jsdom": "^29.1.1",
+    "vite": "^6.3.3",
+    "vitest": "^4.1.8"
   }
 }

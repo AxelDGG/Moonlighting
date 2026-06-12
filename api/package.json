@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env --watch _src/dev-server.js"
+    "dev": "node --env-file=.env --watch _src/dev-server.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -12,5 +13,8 @@
     "@supabase/supabase-js": "^2.49.4",
     "fastify": "^5.8.5",
     "fastify-plugin": "^5.0.3"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
   }
 }
