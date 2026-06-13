@@ -88,6 +88,8 @@ Defaults belong in the callers (`cors.js`, `dev-server.js`), never in `config.js
 
 `main.js` assigns all exported functions to `window.*` so HTML `onclick` attributes work with ES modules. If a new function needs to be callable from HTML, add it to `window` in `main.js`.
 
+**CSP y handlers inline:** el CSP de `vercel.json` DEBE incluir `'unsafe-inline'` en `script-src` mientras la UI use handlers inline (`onclick`/`oninput` en HTML estático y en innerHTML generado). Quitarlo rompe todos los clicks en producción (pasó en el commit f441b89). Para endurecer el CSP primero hay que migrar a event delegation con `addEventListener`.
+
 ### Render pattern
 
 `showTab(name)` → calls the relevant `render*()` function → reads from global state arrays → builds HTML string → sets `innerHTML`. No virtual DOM, no reactivity.
