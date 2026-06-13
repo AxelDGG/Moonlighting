@@ -3,7 +3,7 @@ import {
   ALL_SERVICE_STATES,
   normalizeServiceState,
 } from '../constants/service-states.js';
-import { MAX_LENGTHS } from '../constants/limits.js';
+import { MAX_LENGTHS, QUERY_LIMITS, PAGINATION_QUERYSTRING } from '../constants/limits.js';
 
 const bodySchema = {
   type: 'object',
@@ -61,8 +61,19 @@ export default async function metricasRoutes(fastify) {
     }
   }
 
-  fastify.get('/', async (req, reply) => {
-    let query = fastify.supabase.from('servicios_metricas').select('*').order('id');
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: { ...PAGINATION_QUERYSTRING },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
+    const limit  = req.query.limit ?? QUERY_LIMITS.PAGE_DEFAULT;
+    const offset = req.query.offset ?? 0;
+    let query = fastify.supabase.from('servicios_metricas').select('*').order('id')
+      .range(offset, offset + limit - 1);
 
     // Si es técnico, restringir a sus propios registros (la columna `tecnico` es
     // un string con el nombre, no FK — se resuelve vía user_profiles.tecnico_id → tecnicos.nombre).

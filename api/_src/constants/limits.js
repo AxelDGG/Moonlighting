@@ -18,4 +18,16 @@ export const QUERY_LIMITS = Object.freeze({
   SEARCH_RESULTS:  20,
   MOVIMIENTOS:    100,
   PAGOS:          200,
+  // Paginación de listados (pedidos/clientes/metricas). El default alto
+  // mantiene compatibilidad con loadAll() del frontend, que espera los
+  // datasets completos; el máximo es la válvula de seguridad cuando el
+  // volumen crezca y el frontend pagine de verdad.
+  PAGE_DEFAULT:   500,
+  PAGE_MAX:      1000,
+});
+
+// Schema querystring reutilizable para listados paginados.
+export const PAGINATION_QUERYSTRING = Object.freeze({
+  limit:  { type: 'integer', minimum: 1, maximum: QUERY_LIMITS.PAGE_MAX },
+  offset: { type: 'integer', minimum: 0 },
 });

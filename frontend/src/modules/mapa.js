@@ -886,6 +886,17 @@ export function onRouteDayChange() {
   if (customWrap) customWrap.style.display = sel?.value === 'custom' ? '' : 'none';
 }
 
+// ── Leyenda en móvil ──────────────────────────────────────────────────────────
+// En <=860px las leyendas están ocultas por CSS; este toggle las muestra
+// agregando .legends-open al wrapper del mapa.
+export function toggleMapLegends() {
+  const wrap = document.getElementById('map-wrap');
+  const btn  = document.getElementById('btn-map-legend');
+  if (!wrap) return;
+  const open = wrap.classList.toggle('legends-open');
+  if (btn) btn.setAttribute('aria-pressed', String(open));
+}
+
 export function generateDayRoute() {
   const body = document.getElementById('route-body');
   if (!body) return;

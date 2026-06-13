@@ -87,6 +87,7 @@ export const STATUS_BG = {
 // ── UI: debounces y delays (ms) ────────────────────────────────────────────
 export const DEBOUNCE = Object.freeze({
   AUTOCOMPLETE: 150,
+  SEARCH:       250,
   GEOCODE:      400,
   MAP_RESOLVE:  300,
   LEAFLET_INVALIDATE: 50,

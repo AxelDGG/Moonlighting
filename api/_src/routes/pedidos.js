@@ -1,4 +1,5 @@
 import { ROLES } from '../constants/roles.js';
+import { QUERY_LIMITS, PAGINATION_QUERYSTRING } from '../constants/limits.js';
 import { PEDIDO_LINE_TYPES } from '../constants/units.js';
 import { SERVICE_STATES } from '../constants/service-states.js';
 
@@ -57,11 +58,22 @@ export default async function pedidosRoutes(fastify) {
   const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET / - Listar pedidos
-  fastify.get('/', async (req, reply) => {
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: { ...PAGINATION_QUERYSTRING },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
+    const limit  = req.query.limit ?? QUERY_LIMITS.PAGE_DEFAULT;
+    const offset = req.query.offset ?? 0;
     const { data, error } = await fastify.supabase
       .from('v_pedidos_resumen')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
     if (error) return reply.code(500).send({ error: 'Error al cargar pedidos' });
     return data;
   });

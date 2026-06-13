@@ -118,6 +118,10 @@ Soft delete: deleting a `pedido` sets `estado_id = 'cancelado'` rather than remo
 
 `pedidos.anticipo`/`saldo` se recalculan en la DB con el trigger `pagos_recalc_saldo` (ver `db/migrations/20260612_pagos_saldo_trigger.sql`) — las rutas de `pagos` NO deben recalcular saldos manualmente (race condition).
 
+Los GET de listado (`pedidos`, `clientes`, `metricas`) aceptan `limit` (1–1000, default 500) y `offset`. El default alto es deliberado: `loadAll()` del frontend espera datasets completos; cuando el volumen crezca, el frontend deberá paginar explícitamente.
+
+`audit_log` (tabla + triggers `audit_pagos`/`audit_pedidos`) registra snapshots JSONB antes/después de cada mutación en `pagos` y `pedidos`. No captura actor (la API escribe con service_role). Solo legible con service_role.
+
 ### Rate limiting
 
 Global: 120 req/min per authenticated user (falls back to IP). Per-route override: `/api/ai/feedback` is limited to 10 req/min.

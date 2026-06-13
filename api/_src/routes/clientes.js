@@ -1,5 +1,5 @@
 import { ROLES } from '../constants/roles.js';
-import { MAX_LENGTHS } from '../constants/limits.js';
+import { MAX_LENGTHS, QUERY_LIMITS, PAGINATION_QUERYSTRING } from '../constants/limits.js';
 
 const clienteSchema = {
   type: 'object',
@@ -89,11 +89,25 @@ export default async function clientesRoutes(fastify) {
   const mutate = fastify.requireRole([ROLES.ADMIN, ROLES.GESTOR]);
 
   // GET / - Listar clientes (activos por defecto; ?include_inactive=true para ver todos)
-  fastify.get('/', async (req, reply) => {
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          include_inactive: { type: 'string', enum: ['true', 'false'] },
+          ...PAGINATION_QUERYSTRING,
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (req, reply) => {
+    const limit  = req.query.limit ?? QUERY_LIMITS.PAGE_DEFAULT;
+    const offset = req.query.offset ?? 0;
     let query = fastify.supabase
       .from('clientes')
       .select(`*, cliente_direcciones(id, alias, calle, numero_ext, colonia, municipio, google_maps_url, lat, lng, es_principal)`)
-      .order('id');
+      .order('id')
+      .range(offset, offset + limit - 1);
     if (req.query.include_inactive !== 'true') {
       query = query.eq('activo', true);
     }

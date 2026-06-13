@@ -131,7 +131,7 @@
           </div>
           <div class="cb">
             <div class="sr">
-              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qc" placeholder="Buscar nombre, tel, dirección, municipio…" oninput="renderClientes()"/></div>
+              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qc" placeholder="Buscar nombre, tel, dirección, municipio…" oninput="onSearchInput('clientes')"/></div>
             </div>
             <div class="tw">
               <table>
@@ -166,7 +166,7 @@
           </div>
           <div class="cb">
             <div class="sr">
-              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qp" placeholder="Buscar ID, cliente, servicio, modelo, fecha…" oninput="renderPedidos()"/></div>
+              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qp" placeholder="Buscar ID, cliente, servicio, modelo, fecha…" oninput="onSearchInput('pedidos')"/></div>
             </div>
             <div class="tw">
               <table>
@@ -198,7 +198,7 @@
           </div>
           <div class="cb">
             <div class="sr">
-              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qa" placeholder="Buscar modelo, lugar, notas…" oninput="renderAlmacenamiento()"/></div>
+              <div class="si-wrap"><i data-lucide="search" class="si-ico"></i><input class="si" id="qa" placeholder="Buscar modelo, lugar, notas…" oninput="onSearchInput('almacen')"/></div>
               <select id="fa-cat" class="si" style="flex:0;min-width:150px" onchange="renderAlmacenamiento()">
                 <option value="">Todos</option>
                 <option value="abanico">Abanicos</option>
@@ -311,8 +311,11 @@
             <button class="mf-bar-reset" id="mf-reset" onclick="resetMapFilter()">&#8635; Limpiar</button>
           </div>
         </div>
-        <div style="position:relative">
+        <div style="position:relative" id="map-wrap">
           <div id="map"></div>
+          <button id="btn-map-legend" class="btn bg bsm" onclick="toggleMapLegends()" aria-pressed="false" aria-label="Mostrar u ocultar leyenda del mapa">
+            <i data-lucide="info" style="width:14px;height:14px"></i> Leyenda
+          </button>
           <div id="muni-legend"><h4>Municipios</h4><div id="legend-items"></div></div>
           <div id="status-legend">
             <h4>Estado del servicio</h4>
@@ -497,10 +500,18 @@
                   <label style="display:flex;align-items:center;gap:6px">
                     <i data-lucide="map-pin" style="width:12px;height:12px;color:var(--p)"></i>
                     Ubicación — URL de Google Maps
-                    <span style="font-size:10px;font-weight:400;color:var(--mu)">Abre Google Maps → Compartir → Copiar enlace</span>
                   </label>
                   <input id="nc-url" type="url" placeholder="https://maps.app.goo.gl/..." style="font-size:13px"
                     oninput="onNcUrlInput()"/>
+                  <details class="geo-help">
+                    <summary>¿Cómo copiar la URL?</summary>
+                    <ol>
+                      <li>Abre <b>Google Maps</b> y busca la dirección del cliente.</li>
+                      <li>Mantén presionado el punto exacto hasta que aparezca el pin rojo.</li>
+                      <li>Toca <b>Compartir</b> y luego <b>Copiar enlace</b>.</li>
+                      <li>Pega el enlace aquí — el municipio y la zona se detectan solos.</li>
+                    </ol>
+                  </details>
                 </div>
                 <!-- Preview de geocodificación en vivo -->
                 <div id="nc-geo-preview" style="display:none" class="fi full"></div>

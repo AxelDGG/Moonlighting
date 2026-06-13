@@ -1,8 +1,8 @@
 import { login, logout, checkSession } from './auth.js';
 import { api } from './api.js';
 import { state, cFromDb, pFromDb, pdFromDb, smFromDb, aFromDb, isAdmin, canDo } from './state.js';
-import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners } from './ui.js';
-import { ROLES, PERMISSIONS } from './constants.js';
+import { toast, setLoader, setDbStatus, openOv, closeOv, badge, toggleSidebar, initOverlayListeners, debounced } from './ui.js';
+import { ROLES, PERMISSIONS, DEBOUNCE } from './constants.js';
 import { loadRuntimeConfig } from './runtime-config.js';
 
 import { renderDash } from './modules/dashboard.js';
@@ -15,7 +15,7 @@ import { renderPedidos, openPedidoModal, submitPedido, deletePedido, exportPedid
          pedGoStep, pedNext, pedBack } from './modules/pedidos.js';
 import { renderCal, calNav, calToday, setCalMode, goToDay, calSetTipo, calSetFilter, calToggleCancelados, calResetFilter } from './modules/calendar.js';
 import { openTrackModal, trackAction, saveMotivo, cancelService } from './modules/tracking.js';
-import { initMap, toggleMuni, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
+import { initMap, toggleMuni, toggleMapLegends, onMfInput, onMfFocus, onMfBlur, onMfKey, selectAcItem, toggleMapTipo, resetMapFilter, onMfSelect,
          generateDayRoute, onRouteDayChange, openRouteConfig, saveRouteConfig, closeRouteConfig, onRouteConfigChange,
          viewRoute, deleteRoute, saveCurrentRoute, renderRoutesList } from './modules/mapa.js';
 import { renderMetricas, generateFeedback } from './modules/metricas.js';
@@ -279,6 +279,16 @@ async function init() {
 
 /* ── EXPOSE TO HTML ── */
 window.showTab       = showTab;
+
+// Búsquedas con debounce — los inputs llaman esto en oninput; los render*
+// directos quedan intactos para los flujos CRUD.
+const SEARCH_RENDERS = {
+  clientes: () => renderClientes(),
+  pedidos:  () => renderPedidos(),
+  almacen:  () => renderAlmacenamiento(),
+};
+window.onSearchInput = (which) =>
+  debounced('search-' + which, SEARCH_RENDERS[which] || (() => {}), DEBOUNCE.SEARCH);
 window.toggleSidebar = toggleSidebar;
 window.doLogout      = doLogout;
 
@@ -341,6 +351,7 @@ window.cancelService   = cancelService;
 
 // Map
 window.toggleMuni        = toggleMuni;
+window.toggleMapLegends  = toggleMapLegends;
 window.onMfInput         = onMfInput;
 window.onMfFocus         = onMfFocus;
 window.onMfBlur          = onMfBlur;

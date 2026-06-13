@@ -24,6 +24,15 @@ export function setDbStatus(ok) {
   if (status) status.textContent = ok ? 'Conectado a Supabase' : 'Sin conexión';
 }
 
+// Debounce genérico por clave — para inputs de búsqueda que re-renderizan
+// tablas completas en cada tecla. No usar sobre los render* expuestos en
+// window: los flujos CRUD los llaman tras guardar y no deben retrasarse.
+const _debounces = {};
+export function debounced(key, fn, ms = 250) {
+  clearTimeout(_debounces[key]);
+  _debounces[key] = setTimeout(fn, ms);
+}
+
 export function openOv(id)  { document.getElementById(id)?.classList.add('open'); }
 export function closeOv(id) { document.getElementById(id)?.classList.remove('open'); }
 
